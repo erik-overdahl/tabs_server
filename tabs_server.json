@@ -1,0 +1,7 @@
+{
+  "name": "tabs_server",
+  "description": "external server for communicating with browser about tabs",
+  "path": "/home/francis/Projects/firefox-extension/gateway.sh",
+  "type": "stdio",
+  "allowed_extensions": ["tabs_server@example.org"]
+}
