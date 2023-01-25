@@ -23,8 +23,7 @@ func main() {
 		if err != nil {
 			log.Fatalf("Unable to connect to browser gateway: %v", err)
 		}
-		go server.ReadBrowserMsgs()
-		server.HandleBrowserMessages()
+		server.ReadBrowserMsgs()
 	case "client":
 	default:
 		log.Printf("ERROR: passed unknown command '%s'", cmd)

@@ -72,7 +72,7 @@ type ActivatedMsg struct {
 
 type UpdatedMsg struct {
 	TabId int       `json:"tabId"`
-	Delta *TabDelta `json:"delta"`
+	Delta TabDelta `json:"delta"`
 }
 
 type MovedMsg struct {
@@ -119,7 +119,7 @@ func (s *TabStore) Create(tab *Tab) error {
 	return nil
 }
 
-func (s *TabStore) Activate(msg ActivatedMsg) error {
+func (s *TabStore) Activate(msg *ActivatedMsg) error {
 	tab, err := s.Get(msg.TabId)
 	if err != nil {
 		return fmt.Errorf("ERROR: Activate: %v", err)
@@ -128,7 +128,7 @@ func (s *TabStore) Activate(msg ActivatedMsg) error {
 	return nil
 }
 
-func (s *TabStore) Update(msg UpdatedMsg) error {
+func (s *TabStore) Update(msg *UpdatedMsg) error {
 	tab, err := s.Get(msg.TabId)
 	if err != nil {
 		return fmt.Errorf("ERROR: Update: %v", err)
@@ -173,7 +173,7 @@ func (s *TabStore) Update(msg UpdatedMsg) error {
 	return nil
 }
 
-func (s *TabStore) Move(msg MovedMsg) error {
+func (s *TabStore) Move(msg *MovedMsg) error {
 	tab, err := s.Get(msg.TabId)
 	if err != nil {
 		return fmt.Errorf("ERROR: Move: %v", err)
@@ -183,7 +183,7 @@ func (s *TabStore) Move(msg MovedMsg) error {
 }
 
 // Probably not the way we want to handle this overall
-func (s *TabStore) Remove(msg RemovedMsg) error {
+func (s *TabStore) Remove(msg *RemovedMsg) error {
 	tab, err := s.Get(msg.TabId)
 	if err != nil {
 		return fmt.Errorf("ERROR: Remove: %v", err)
@@ -193,7 +193,7 @@ func (s *TabStore) Remove(msg RemovedMsg) error {
 	return nil
 }
 
-func (s *TabStore) WindowChange(msg AttachedMsg) error {
+func (s *TabStore) WindowChange(msg *AttachedMsg) error {
 	tab, err := s.Get(msg.TabId)
 	if err != nil {
 		return fmt.Errorf("ERROR: WindowChange: %v", err)

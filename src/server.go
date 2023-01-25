@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -10,7 +11,6 @@ import (
 
 type TabsServer struct {
 	tabs            *TabStore
-	browserMessages chan []byte
 	clientId        uint32
 	gatewayConn     net.Conn
 }
@@ -18,7 +18,6 @@ type TabsServer struct {
 func MakeTabsServer() *TabsServer {
 	return &TabsServer{
 		tabs:            MakeTabStore(),
-		browserMessages: make(chan []byte),
 		clientId:        0,
 	}
 }
@@ -45,17 +44,27 @@ func (s *TabsServer) ConnectBrowserGateway() error {
 		if err != nil {
 			log.Printf("ERROR: Unable to build list request: %v", err)
 		}
-		n, err := SendBrowserMsg(s.gatewayConn, listRequest)
+		_, err = SendBrowserMsg(s.gatewayConn, listRequest)
 		if err != nil {
 			log.Fatal(err)
 		}
-		log.Printf("Sent %d bytes to gateway", n)
 	}()
 
 	return nil
 }
 
 func (s *TabsServer) ReadBrowserMsgs() {
+	messages := make(chan []byte)
+
+	go func(msgs chan []byte) {
+		for m := range msgs {
+			err := s.HandleBrowserMessage(m)
+			if err != nil {
+				log.Println(err)
+			}
+		}
+	}(messages)
+
 	for {
 		buf, err := ReadBrowserMsg(s.gatewayConn)
 		if err == io.EOF {
@@ -66,128 +75,73 @@ func (s *TabsServer) ReadBrowserMsgs() {
 			log.Printf("ERROR: reading msg: %#v", err)
 			continue
 		}
-		s.browserMessages <- buf
+		messages <- buf
 	}
 }
 
-func (s *TabsServer) HandleBrowserMessages() {
-	for buf := range s.browserMessages {
-		var rawMsg map[string]json.RawMessage
-		err := json.Unmarshal(buf[4:], &rawMsg)
-		if err != nil {
-			log.Printf("ERROR: unmarshaling msg: %v: `%s`", err, string(buf[4:]))
-			continue
-		}
+func (s *TabsServer) HandleBrowserMessage(buf []byte) error {
+	var rawMsg map[string]json.RawMessage
+	if err := json.Unmarshal(buf[4:], &rawMsg); err != nil {
+		log.Printf("ERROR: unmarshaling msg: %v: `%s`", err, string(buf[4:]))
+		return nil
+	}
 
-		var action string
-		if actionRaw, exists := rawMsg["action"]; exists {
-			if err := json.Unmarshal(actionRaw, &action); err != nil {
-			}
-		} else {
-			log.Printf("ERROR: Received message with no action")
-			continue
-		}
-		content, exists := rawMsg["content"]
-		if !exists {
-			log.Printf("ERROR: Received message with no content")
-			continue
-		}
-		switch action {
-		case "error":
-			var msg string
-			if err := json.Unmarshal(content, &msg); err != nil {
-				log.Printf("ERROR: Failed to parse message content: %v", err)
-				continue
-			}
-			handleBrowserError(msg)
+	var action string
+	if actionRaw, exists := rawMsg["action"]; !exists {
+		return fmt.Errorf("ERROR: Received message with no action")
+	} else if err := json.Unmarshal(actionRaw, &action); err != nil {
+		return fmt.Errorf("ERROR: unmarshaling msg action: %v", err)
+	}
+	content, exists := rawMsg["content"]
+	if !exists {
+		log.Printf("ERROR: Received message with no content")
+		return nil
+	}
 
-		case "clientId":
-			var msg uint32
-			if err := json.Unmarshal(content, &msg); err != nil {
-				log.Printf("ERROR: Failed to parse message content: %v", err)
-				continue
-			}
-			log.Printf("Client id is %d", msg)
-			s.clientId = msg
+	switch action {
+	case "error":
+		return CastAndCall(content, handleBrowserError)
 
-		case "created":
-			var msg Tab
-			if err := json.Unmarshal(content, &msg); err != nil {
-				log.Printf("ERROR: Failed to parse message content: %v", err)
-				continue
-			}
-			log.Printf("Received: %s: %v", action, msg)
-			err := s.tabs.Create(&msg)
-			if err != nil {
-				log.Println(err)
-			}
+	case "clientId":
+		return CastAndCall(content,
+			func(n *uint32) error {
+				s.clientId = *n
+				return nil
+			})
 
-		case "activated":
-			var msg ActivatedMsg
-			if err := json.Unmarshal(content, &msg); err != nil {
-				log.Printf("ERROR: Failed to parse message content: %v", err)
-				continue
-			}
-			log.Printf("Received: %s: %v", action, msg)
-			err := s.tabs.Activate(msg)
-			if err != nil {
-				log.Println(err)
-			}
+	case "created":
+		return CastAndCall(content, s.tabs.Create)
 
-		case "updated":
-			var msg UpdatedMsg
-			if err := json.Unmarshal(content, &msg); err != nil {
-				log.Printf("ERROR: Failed to parse message content: %#v", err)
-				continue
-			}
-			log.Printf("Received: %s: %d %v", action, msg.TabId, *msg.Delta)
-			err := s.tabs.Update(msg)
-			if err != nil {
-				log.Println(err)
-			}
+	case "activated":
+		return CastAndCall(content, s.tabs.Activate)
 
-		case "moved":
-			var msg MovedMsg
-			if err := json.Unmarshal(content, &msg); err != nil {
-				log.Printf("ERROR: Failed to parse message content: %v", err)
-				continue
-			}
-			log.Printf("Received: %s: %v", action, msg)
-			err := s.tabs.Move(msg)
-			if err != nil {
-				log.Println(err)
-			}
+	case "updated":
+		return CastAndCall(content, s.tabs.Update)
 
-		case "removed":
-			var msg RemovedMsg
-			if err := json.Unmarshal(content, &msg); err != nil {
-				log.Printf("ERROR: Failed to parse message content: %v", err)
-				continue
-			}
-			log.Printf("Received: %s: %v", action, msg)
-			err := s.tabs.Remove(msg)
-			if err != nil {
-				log.Println(err)
-			}
+	case "moved":
+		return CastAndCall(content, s.tabs.Move)
 
-		case "attached", "detached":
-			var msg AttachedMsg
-			if err := json.Unmarshal(content, &msg); err != nil {
-				log.Printf("ERROR: Failed to parse message content: %v", err)
-				continue
-			}
-			log.Printf("Received: %s: %v", action, msg)
-			err := s.tabs.WindowChange(msg)
-			if err != nil {
-				log.Println(err)
-			}
+	case "removed":
+		return CastAndCall(content, s.tabs.Remove)
 
-		default:
-			log.Printf("ERROR: Msg received from browser with unknown action: %s", action)
-		}
+	case "attached", "detached":
+		return CastAndCall(content, s.tabs.WindowChange)
+
+	default:
+		return fmt.Errorf("ERROR: Msg received from browser with unknown action: %s", action)
 	}
 }
 
-func handleBrowserError(error string) {
-	log.Printf("Browser returned error: %s", error)
+func CastAndCall[T any](content json.RawMessage, f func(*T) error) error {
+	var msg T
+	if err := json.Unmarshal(content, &msg); err != nil {
+		return fmt.Errorf("ERROR: Failed to parse message content: %v", err)
+	}
+	log.Printf("RECEIVED: %#v", msg)
+	return f(&msg)
+}
+
+func handleBrowserError(err *string) error {
+	log.Printf("Browser returned error: %s", *err)
+	return nil
 }
