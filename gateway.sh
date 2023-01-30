@@ -1,3 +1,3 @@
 #!/usr/bin/env sh
 
-./src/tabs_server gateway
+./tabs_server gateway
