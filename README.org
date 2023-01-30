@@ -21,3 +21,4 @@ up-to-date picture of the state of the browser.
 - [ ] Clients can opt-in to receive pushes
 - [ ] Integrate Session API
 - [ ] Integrate History API
+- [ ] Automate installation
