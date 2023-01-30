@@ -1,0 +1,23 @@
+#+title: Externalize Firefox Operations
+
+A web extension and Go project for exposing aspects of the Firefox
+webextension API to external processes via the Native Messaging API.
+
+Currently exposes most of the methods of the Tabs API and registers
+listeners for most of its events.
+
+* Design
+A gateway server is started by the browser extension. It accepts
+client connections on a unix socket.
+
+In an effort to make improve the latency of client read queries,
+listeners are registered on many of the Events in the browser's
+extension API. These listeners push changes to the gateway server.
+Changes are also pushed to all connected clients so that they have an
+up-to-date picture of the state of the browser.
+
+* To-Dos
+- [ ] Better logging
+- [ ] Clients can opt-in to receive pushes
+- [ ] Integrate Session API
+- [ ] Integrate History API
