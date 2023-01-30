@@ -72,7 +72,7 @@ type ActivatedMsg struct {
 
 type UpdatedMsg struct {
 	TabId int       `json:"tabId"`
-	Delta TabDelta `json:"delta"`
+	Delta TabDelta  `json:"delta"`
 }
 
 type MovedMsg struct {
@@ -95,27 +95,57 @@ type AttachedMsg struct {
 }
 
 type TabStore struct {
-	tabs   map[int]*Tab
-	closed []*Tab
+	Open   map[int]*Tab
+	Closed []*Tab
 }
 
 func MakeTabStore() *TabStore {
-	return &TabStore{tabs: make(map[int]*Tab), closed: []*Tab{}}
+	return &TabStore{Open: make(map[int]*Tab), Closed: []*Tab{}}
+}
+
+func (s *TabStore) Apply(msg *Message) error {
+	switch msg.Action {
+	case "error":
+		return CastAndCall(msg.Content, handleBrowserError)
+	case "list":
+		return CastAndCall(msg.Content, func(tabs *[]*Tab) error {
+			for _, tab := range *tabs {
+				if err := s.Add(tab); err != nil {
+					return err
+				}
+			}
+			return nil
+		})
+	case "created":
+		return CastAndCall(msg.Content, s.Add)
+	case "activated":
+		return CastAndCall(msg.Content, s.Activate)
+	case "updated":
+		return CastAndCall(msg.Content, s.Update)
+	case "moved":
+		return CastAndCall(msg.Content, s.Move)
+	case "removed":
+		return CastAndCall(msg.Content, s.Remove)
+	case "attached", "detached":
+		return CastAndCall(msg.Content, s.WindowChange)
+	default:
+		return fmt.Errorf("Msg received from gateway with unknown action: %s", msg.Action)
+	}
 }
 
 func (s *TabStore) Get(id int) (*Tab, error) {
-	if tab, exists := s.tabs[id]; exists {
+	if tab, exists := s.Open[id]; exists {
 		return tab, nil
 	}
 	return nil, fmt.Errorf("Tab with id %d not found", id)
 }
 
-func (s *TabStore) Create(tab *Tab) error {
+func (s *TabStore) Add(tab *Tab) error {
 	_, err := s.Get(tab.ID)
 	if err == nil {
 		return fmt.Errorf("ERROR: Create: Tab with id %d already exists", tab.ID)
 	}
-	s.tabs[tab.ID] = tab
+	s.Open[tab.ID] = tab
 	return nil
 }
 
@@ -188,8 +218,8 @@ func (s *TabStore) Remove(msg *RemovedMsg) error {
 	if err != nil {
 		return fmt.Errorf("ERROR: Remove: %v", err)
 	}
-	s.closed = append(s.closed, tab)
-	delete(s.tabs, tab.ID)
+	s.Closed = append(s.Closed, tab)
+	delete(s.Open, tab.ID)
 	return nil
 }
 

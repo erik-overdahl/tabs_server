@@ -6,27 +6,43 @@ import (
 	"fmt"
 	"io"
 	"log"
-	"math/rand"
 	"net"
 	"os"
+
+	"github.com/google/uuid"
+)
+
+/*
+ * The Gateway is started by the browser
+ * The browser sends messages to the gateway's stdin and reads msg from
+ * the gateway's stdout
+ */
+
+var (
+	GatewaySockAddr = "/tmp/browser_gateway.sock"
+	GatewayLogfile = "/home/francis/Projects/firefox-extension/gateway.log"
 )
 
 type Gateway struct {
-	connections map[uint32]net.Conn
-	inStream    chan []byte
-	outStream   chan []byte
+	tabs        *TabStore
+	connections []net.Conn
+	requests	map[uuid.UUID]net.Conn
+	inStream    chan *Message
+	outStream   chan *Message
 }
 
 func MakeGateway() *Gateway {
 	return &Gateway{
-		connections: map[uint32]net.Conn{},
-		inStream:    make(chan []byte),
-		outStream:   make(chan []byte),
+		tabs:        MakeTabStore(),
+		connections: []net.Conn{},
+		requests:	 map[uuid.UUID]net.Conn{},
+		inStream:    make(chan *Message),
+		outStream:   make(chan *Message),
 	}
 }
 
 func (g *Gateway) Start() {
-	f, err := os.OpenFile("/home/francis/Projects/firefox-extension/gateway.log", os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
+	f, err := os.OpenFile(GatewayLogfile, os.O_RDWR|os.O_CREATE|os.O_APPEND, 0666)
 	if err != nil {
 		log.Fatalf("error opening file: %v", err)
 	}
@@ -36,27 +52,74 @@ func (g *Gateway) Start() {
 
 	log.Printf("PID is %d", os.Getpid())
 
-	go g.sendBrowserMsgs()
-
 	// send messages from all connections to stdout
-	go g.passMsgsToBrowser()
-
-	go g.listenForConnections()
-
-	stdin := bufio.NewReader(os.Stdin)
-	for {
-		buf, err := ReadBrowserMsg(stdin)
-		if err == io.EOF {
-			log.Printf("Received EOF from browser")
-			break
-		} else if err != nil {
-			log.Printf("ERROR: %#v", err)
-			continue
+	go func(){
+		for msg := range g.outStream {
+			if err := SendMsg(os.Stdout, *msg); err != nil {
+				log.Fatalf("Failed to write to stdout (???): %v", err)
+			}
 		}
-		// log.Printf("Got msg of len %d bytes", len(buf))
+	}()
 
-		g.inStream <- buf
+	go func() {
+		for msg := range g.inStream {
+			if err := g.handleMessage(*msg); err != nil {
+				log.Printf("ERROR: handling msg: %v", err)
+			}
+		}
+	}()
+
+	go func() {
+
+		stdin := bufio.NewReader(os.Stdin)
+		for {
+			msg, err := ReadMsg(stdin)
+			if err == io.EOF {
+				log.Printf("Received EOF from browser")
+				break
+			} else if err != nil {
+				log.Printf("ERROR: %#v", err)
+				continue
+			}
+			g.inStream <- msg
+		}
+	}()
+
+	g.outStream <- &Message{ID: uuid.Nil, Action: "list"}
+	g.listenForConnections()
+}
+
+/*
+   Handle messages sent by the browser
+
+   If the message id is 0, the message is a push from the browser. The
+   change is applied to the gateway's tab store and then broadcast to
+   all clients
+
+   Otherwise, it is a response to a request we sent, and we route it
+   appropriately
+  */
+func (g *Gateway) handleMessage(msg Message) error {
+	if msg.ID != uuid.Nil {
+		log.Printf("Msg for %s", msg.ID)
+		if conn, exists := g.requests[msg.ID]; !exists {
+			return fmt.Errorf("Received response for non-outstanding request")
+		} else {
+			log.Println("Sending to", conn)
+			delete(g.requests, msg.ID)
+			return SendMsg(conn, msg)
+		}
 	}
+	if err := g.tabs.Apply(&msg); err != nil {
+		return err
+	}
+	for _, conn := range g.connections {
+		log.Println("FORWARDING: ", conn)
+		if err := SendMsg(conn, msg); err != nil {
+			log.Printf("Failed to send msg to %v: %v", conn, err)
+		}
+	}
+	return nil
 }
 
 func (g *Gateway) listenForConnections() {
@@ -74,47 +137,12 @@ func (g *Gateway) listenForConnections() {
 		if err != nil {
 			log.Fatal("ERROR: accept: ", err)
 		}
-		id := rand.Uint32()
-
-		log.Printf("New connection accepted (id %d)", id)
-		_, err = SendBrowserMsg(conn, []byte(fmt.Sprintf(`{"action":"clientId", "content": %d}`, id)))
-		if err != nil {
-			log.Printf("ERROR: send clientId msg to client: %v", err)
-		}
-		g.connections[id] = conn
+		g.connections = append(g.connections, conn)
+		log.Println("New client connected")
 		go g.listenConn(conn)
 	}
-
 }
 
-func (g *Gateway) sendBrowserMsgs() {
-	for msg := range g.inStream {
-		var body map[string]json.RawMessage
-		if err := json.Unmarshal(msg[4:], &body); err != nil {
-			log.Printf("ERROR: Failed to parse message: %v", err)
-			continue
-		}
-		if clientIdRaw, exists := body["clientId"]; exists {
-			var clientId uint32
-			if err := json.Unmarshal(clientIdRaw, &clientId); err != nil {
-				log.Printf("ERROR: Failed to parse client id: %v", err)
-				continue
-			}
-			if client, exists := g.connections[clientId]; exists {
-				client.Write(msg)
-			} else {
-				log.Printf("ERROR: Received message for unknown client %d", clientId)
-			}
-		} else {
-			for clientId, client := range g.connections {
-				_, err := client.Write(msg)
-				if err != nil {
-					log.Printf("ERROR: writing to client %d: %v", clientId, err)
-				}
-			}
-		}
-	}
-}
 
 func (g *Gateway) listenConn(conn net.Conn) {
 	defer g.closeConn(conn)
@@ -122,7 +150,7 @@ func (g *Gateway) listenConn(conn net.Conn) {
 	// I think this works???
 	cIn := bufio.NewReader(conn)
 	for {
-		buf, err := ReadBrowserMsg(cIn)
+		msg, err := ReadMsg(cIn)
 		if err == io.EOF {
 			log.Printf("Received EOF from client")
 			break
@@ -130,26 +158,35 @@ func (g *Gateway) listenConn(conn net.Conn) {
 			log.Printf("ERROR: %#v", err)
 			continue
 		}
-		// log.Printf("Got msg of len %d bytes from client", len(buf))
 
-		g.outStream <- buf
-	}
-}
-
-func (g *Gateway) passMsgsToBrowser() {
-	for msg := range g.outStream {
-		_, err := SendBrowserMsg(os.Stdout, msg)
-		if err != nil {
-			log.Fatalf("Failed to write to stdout (???): %v", err)
+		// The gateway can respond immediately to Read requests
+		// and forwards Write requests to the browser
+		switch msg.Action {
+		case "list":
+			currentTabs := make([]*Tab, len(g.tabs.Open), len(g.tabs.Open))
+			i := 0
+			for _, tab := range g.tabs.Open {
+				currentTabs[i] = tab
+				i++
+			}
+			if content, err := json.Marshal(currentTabs); err != nil {
+				log.Printf("ERROR: Failed to list tabs: %v", err)
+			} else {
+				response := Message{ID: msg.ID, Action: msg.Action, Content: content}
+				SendMsg(conn, response)
+			}
+		default:
+			g.requests[msg.ID] = conn
+			g.outStream <- msg
 		}
 	}
 }
 
 func (g *Gateway) closeConn(conn net.Conn) {
-	log.Printf("Closing connection")
-	for clientId, client := range g.connections {
-		if conn == client {
-			delete(g.connections, clientId)
+	log.Printf("Closing connection %v", conn)
+	for i, c := range g.connections {
+		if conn == c {
+			g.connections = append(g.connections[:i], g.connections[i+1:]...)
 			break
 		}
 	}

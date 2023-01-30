@@ -1,44 +1,163 @@
+var port
+
+function reconnect() {
+  port = browser.runtime.connectNative("tabs_server")
+  port.onDisconnect.addListener(() => {
+    if (browser.runtime.lastError) {
+      console.log("DISCONNECT", browser.runtime.lastError)
+    } else {
+      console.log("DISCONNECT: unknown reason")
+    }
+  })
+  port.onMessage.addListener((msg) => { handleMsg(msg) })
+  return port
+}
+
+port = reconnect()
+
+
 /*
- * messages sent from the external server will have the `action`
- * property (a string) and a `content` object to be unpacked in
- * in the BrowserTabs method specified by `action`
+messages sent from the external server will have
+  - `action`(a string)
+  - `id` (a number)
+  - `content` object to be unpacked in the BrowserTabs method
+    specified by `action`
  */
+
+function sendErr(id, error) {
+  msg = {
+    action: "error",
+    id: id,
+    content: error,
+  }
+  console.log(msg)
+  port.postMessage(msg)
+}
+
+function sendSuccess(id, content) {
+  port.postMessage({
+    action: "success",
+    id: id,
+    content: content,
+  })
+}
 
 function handleMsg(msg) {
   console.log("Received:", msg)
+  if (!msg.id) {
+    sendErr(nil, "Received message with no id")
+    return
+  }
   if (!msg.action) {
-    port.postMessage({
-      action: "error",
-      clientId: msg.clientId,
-      content: "Received msg with no action"
-    })
+    sendErr(msg.id, "Received message with no action")
     return
   }
 
+  const args = msg.content
+
   switch (msg.action) {
+    case "list":
+      // is it possible this could return too much data?
+      browser.tabs.query({}).then(
+        (result) => {
+          console.log("SENDING: list")
+          port.postMessage({
+            action: "list",
+            id: msg.id,
+            content: result
+          })
+        },
+        (error) => { sendErr(msg.id, error) }
+      )
 
     case "query":
-      browser.tabs.query(msg.content).then(
+      // is it possible this could return too much data?
+      browser.tabs.query(args).then(
         (result) => {
-          for (const t of result) {
-            response = {
-              action: "created",
-              clientId: msg.clientId,
-              content: t,
-            }
-            console.log("SENDING: ", response)
-            port.postMessage(response)
-          }
+          port.postMessage({
+            action: "query",
+            id: msg.id,
+            content: result
+          })
         },
-        (error) => {}
+        (error) => { sendErr(msg.id, error) }
+      )
+
+    case "create":
+      browser.tabs.create(args).then(
+        (tab) => {sendSuccess(msg.id, tab.id)},
+        (error) => {sendErr(msg.id, error)}
+      )
+
+    case "duplicate":
+      browser.tabs.duplicate(args.tabId, args.props).then(
+        (tab) => { sendSuccess(msg.id, tab.id) },
+        (error) => {sendErr(msg.id, error)}
+      )
+
+    case "update":
+      browser.tabs.update(args.tabId, args.delta).then(
+        sendSuccess(msg.id, nil),
+        (error) => {sendErr(msg.id, error)}
+      )
+
+    case "move":
+      browser.tabs.move(args.tabId, args.props).then(
+        sendSuccess(msg.id),
+        (error) => {sendErr(msg.id, error)}
+      )
+
+    case "reload":
+      browser.tabs.reload(args.tabId, {bypassCache: args.bypassCache}).then(
+        sendSuccess(msg.id),
+        (error) => {sendErr(msg.id, error)}
+      )
+
+    case "remove":
+      browser.tabs.remove(args).then(
+        sendSuccess(msg.id),
+        (error) => {sendErr(msg.id, error)}
+      )
+
+    case "discard":
+      browser.tabs.discard(args).then(
+        sendSuccess(msg.id),
+        (error) => {sendErr(msg.id, error)}
+      )
+
+    // requires "tabHide" permission
+    case "hide":
+      browser.tabs.hide(args).then(
+        sendSuccess(msg.id),
+        (error) => {sendErr(msg.id, error)}
+      )
+
+    case "show":
+      browser.tabs.show(args).then(
+        sendSuccess(msg.id),
+        (error) => {sendErr(msg.id, error)}
+      )
+
+    case "toggleReaderMode":
+      browser.tabs.toggleReaderMode(args).then(
+        sendSuccess(msg.id),
+        (error) => {sendErr(msg.id, error)}
+      )
+
+    case "goForward":
+      browser.tabs.goForward(args).then(
+        sendSuccess(msg.id),
+        (error) => {sendErr(msg.id, error)}
+      )
+
+    case "goBack":
+      browser.tabs.goBack(args).then(
+        sendSuccess(msg.id),
+        (error) => {sendErr(msg.id, error)}
       )
 
     default:
-      port.postMessage({
-        action: "error",
-        clientId: msg.clientId,
-        content: `Action ${msg.Action} is unknown`
-      })
+      sendErr(msg.id, `Action ${msg.Action} is unknown`)
   }
 // captureTab
 // captureVisibleTab
@@ -52,30 +171,6 @@ function handleMsg(msg) {
 // getZoom
 // getZoomSettings
 }
-
-var port
-
-function reconnect() {
-  if (port) {
-    if (browser.runtime.lastError) {
-      console.log("DISCONNECT", browser.runtime.lastError)
-    } else {
-      console.log("DISCONNECT: unknown reason")
-    }
-    console.log("Attempting restart")
-  } else {
-    console.log("Starting gateway")
-  }
-  port = browser.runtime.connectNative("tabs_server")
-  port.onDisconnect.addListener(
-    (p) => {reconnect()}
-  )
-  port.onMessage.addListener((msg) => { handleMsg(msg) })
-  return port
-}
-
-port = reconnect()
-
 
 /* activeInfo {tabId, previousTabId, windowId} */
 browser.tabs.onActivated.addListener(
