@@ -15,7 +15,7 @@ import (
 )
 
 func main() {
-	cmd := "serve"
+	cmd := "client"
 	if len(os.Args) > 0 {
 		cmd = os.Args[1]
 	}
