@@ -24,17 +24,17 @@ messages sent from the external server will have
     specified by `action`
  */
 
-function sendErr(id, error) {
+function sendErr(id, err) {
   msg = {
     action: "error",
     id: id,
-    content: error,
+    content: err.message,
   }
   console.log(msg)
   port.postMessage(msg)
 }
 
-function sendSuccess(id, content) {
+function sendSuccess(id, content = {}) {
   port.postMessage({
     action: "success",
     id: id,
@@ -58,103 +58,87 @@ function handleMsg(msg) {
   switch (msg.action) {
     case "list":
       // is it possible this could return too much data?
-      browser.tabs.query({}).then(
-        (result) => {
+      browser.tabs.query({})
+        .then(result => {
           console.log("SENDING: list")
           port.postMessage({
             action: "list",
             id: msg.id,
             content: result
-          })
-        },
-        (error) => { sendErr(msg.id, error) }
-      )
+          })})
+        .catch(err => sendErr(msg.id, err))
 
     case "query":
       // is it possible this could return too much data?
-      browser.tabs.query(args).then(
-        (result) => {
+      browser.tabs.query(args)
+        .then(result =>
           port.postMessage({
             action: "query",
             id: msg.id,
             content: result
-          })
-        },
-        (error) => { sendErr(msg.id, error) }
-      )
+          }))
+        .catch(err => sendErr(msg.id, err))
 
     case "create":
-      browser.tabs.create(args).then(
-        (tab) => {sendSuccess(msg.id, tab.id)},
-        (error) => {sendErr(msg.id, error)}
-      )
+      browser.tabs.create(args)
+        .then(tab => sendSuccess(msg.id, tab.id))
+        .catch(err => sendErr(msg.id, err))
 
     case "duplicate":
-      browser.tabs.duplicate(args.tabId, args.props).then(
-        (tab) => { sendSuccess(msg.id, tab.id) },
-        (error) => {sendErr(msg.id, error)}
-      )
+      browser.tabs.duplicate(args.tabId, args.props)
+        .then(tab => sendSuccess(msg.id, tab.id))
+        .catch(err => sendErr(msg.id, err))
 
     case "update":
-      browser.tabs.update(args.tabId, args.delta).then(
-        sendSuccess(msg.id, nil),
-        (error) => {sendErr(msg.id, error)}
-      )
+      browser.tabs.update(args.tabId, args.delta)
+        .then(sendSuccess(msg.id))
+        .catch(err => sendErr(msg.id, err))
 
     case "move":
-      browser.tabs.move(args.tabId, args.props).then(
-        sendSuccess(msg.id),
-        (error) => {sendErr(msg.id, error)}
-      )
+      browser.tabs.move(args.tabId, args.props)
+        .then(sendSuccess(msg.id))
+        .catch(err => sendErr(msg.id, err))
 
     case "reload":
-      browser.tabs.reload(args.tabId, {bypassCache: args.bypassCache}).then(
-        sendSuccess(msg.id),
-        (error) => {sendErr(msg.id, error)}
-      )
+      browser.tabs.reload(args.tabId, { bypassCache: args.bypassCache })
+        .then(sendSuccess(msg.id))
+        .catch(err => sendErr(msg.id, err))
 
     case "remove":
-      browser.tabs.remove(args).then(
-        sendSuccess(msg.id),
-        (error) => {sendErr(msg.id, error)}
-      )
+      browser.tabs.remove(args)
+        .then(sendSuccess(msg.id))
+        .catch(err => sendErr(msg.id, err))
 
     case "discard":
-      browser.tabs.discard(args).then(
-        sendSuccess(msg.id),
-        (error) => {sendErr(msg.id, error)}
-      )
+      browser.tabs.discard(args)
+        .then(sendSuccess(msg.id))
+        .catch(err => sendErr(msg.id, err))
 
     // requires "tabHide" permission
     case "hide":
-      browser.tabs.hide(args).then(
-        sendSuccess(msg.id),
-        (error) => {sendErr(msg.id, error)}
-      )
+      browser.tabs.hide(args)
+        .then(sendSuccess(msg.id))
+        .catch(err => sendErr(msg.id, err))
 
     case "show":
-      browser.tabs.show(args).then(
-        sendSuccess(msg.id),
-        (error) => {sendErr(msg.id, error)}
-      )
+      browser.tabs.show(args)
+        .then(sendSuccess(msg.id))
+        .catch(err => sendErr(msg.id, err))
 
     case "toggleReaderMode":
-      browser.tabs.toggleReaderMode(args).then(
-        sendSuccess(msg.id),
-        (error) => {sendErr(msg.id, error)}
-      )
+      browser.tabs.toggleReaderMode(args)
+        .then(sendSuccess(msg.id))
+        .catch(err => sendErr(msg.id, err))
 
     case "goForward":
-      browser.tabs.goForward(args).then(
-        sendSuccess(msg.id),
-        (error) => {sendErr(msg.id, error)}
-      )
+      browser.tabs.goForward(args)
+        .then(sendSuccess(msg.id))
+        .catch(err => sendErr(msg.id, err))
 
     case "goBack":
-      browser.tabs.goBack(args).then(
-        sendSuccess(msg.id),
-        (error) => {sendErr(msg.id, error)}
-      )
+      browser.tabs.goBack(args)
+        .then(sendSuccess(msg.id))
+        .catch(err => sendErr(msg.id, err))
 
     default:
       sendErr(msg.id, `Action ${msg.Action} is unknown`)
