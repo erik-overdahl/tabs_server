@@ -150,6 +150,10 @@ func (s *TabStore) Add(tab *Tab) error {
 }
 
 func (s *TabStore) Activate(msg *ActivatedMsg) error {
+	// do we care if the previously active tab isn't found?
+	if previous, exists := s.Open[msg.Previous]; exists {
+		previous.Active = false
+	}
 	tab, err := s.Get(msg.TabId)
 	if err != nil {
 		return fmt.Errorf("ERROR: Activate: %v", err)
