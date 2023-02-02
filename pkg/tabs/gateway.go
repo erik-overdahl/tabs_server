@@ -26,7 +26,7 @@ var (
 type Gateway struct {
 	tabs        *TabStore
 	connections []net.Conn
-	requests	map[uuid.UUID]net.Conn
+	requests	map[uuid.UUID]chan *Message
 	inStream    chan *Message
 	outStream   chan *Message
 }
@@ -35,7 +35,7 @@ func MakeGateway() *Gateway {
 	return &Gateway{
 		tabs:        MakeTabStore(),
 		connections: []net.Conn{},
-		requests:	 map[uuid.UUID]net.Conn{},
+		requests:	 make(map[uuid.UUID]chan *Message),
 		inStream:    make(chan *Message),
 		outStream:   make(chan *Message),
 	}
@@ -85,7 +85,15 @@ func (g *Gateway) Start() {
 		}
 	}()
 
-	g.outStream <- &Message{ID: uuid.Nil, Action: "list"}
+	responseChan := make(chan *Message)
+	request := MakeMessage("list", nil)
+	g.requests[request.ID] = responseChan
+	g.outStream <- request
+
+	response := <-responseChan
+	g.tabs.Apply(response)
+	delete(g.requests, request.ID)
+
 	g.listenForConnections()
 }
 
@@ -102,12 +110,12 @@ func (g *Gateway) Start() {
 func (g *Gateway) handleMessage(msg Message) error {
 	if msg.ID != uuid.Nil {
 		log.Printf("Msg for %s", msg.ID)
-		if conn, exists := g.requests[msg.ID]; !exists {
+		if responseChan, exists := g.requests[msg.ID]; !exists {
 			return fmt.Errorf("Received response for non-outstanding request")
 		} else {
-			log.Println("Sending to", conn)
 			delete(g.requests, msg.ID)
-			return SendMsg(conn, msg)
+			responseChan <- &msg
+			return nil
 		}
 	}
 	if err := g.tabs.Apply(&msg); err != nil {
@@ -176,8 +184,13 @@ func (g *Gateway) listenConn(conn net.Conn) {
 				SendMsg(conn, response)
 			}
 		default:
-			g.requests[msg.ID] = conn
-			g.outStream <- msg
+			responseChan := make(chan *Message)
+			g.requests[msg.ID] = responseChan
+			go func(resp chan *Message) {
+				g.outStream <- msg
+				response := <-responseChan
+				SendMsg(conn, *response)
+			}(responseChan)
 		}
 	}
 }
