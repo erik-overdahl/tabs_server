@@ -68,75 +68,89 @@ function handleRequest(request) {
     case "list":
       // is it possible this could return too much data?
       browser.tabs.query({})
-             .then((result) => sendResponse(request.id, "list", result))
-             .catch((err) => sendErr(request.id, err.message))
+        .then((result) => { sendResponse(request.id, "list", result) })
+        .catch(err => sendErr(request.id, err.message))
+      break
 
     case "query":
       // is it possible this could return too much data?
       browser.tabs.query(request.props)
-        .then((result) => sendResponse(request.id, "query", result))
-        .catch((err) => sendErr(request.id, err.message))
+        .then((result) => { sendResponse(request.id, "query", result) })
+        .catch(err => sendErr(request.id, err.message))
+      break
 
     case "create":
       browser.tabs.create(request.props)
-        .then(tab => sendSuccess(request.id, tab.id))
-        .catch((err) => sendErr(request.id, err.message))
+        .then((tab) => { sendSuccess(request.id, tab.id) })
+        .catch(err => sendErr(request.id, err.message))
+      break
 
     case "duplicate":
       browser.tabs.duplicate(request.tabId, request.props)
-        .then(tab => sendSuccess(request.id, tab.id))
-        .catch((err) => sendErr(request.id, err.message))
+        .then((tab) => { sendSuccess(request.id, tab.id) })
+        .catch(err => sendErr(request.id, err.message))
+      break
 
     case "update":
       browser.tabs.update(request.tabId, request.props)
-        .then(sendSuccess(request.id))
-        .catch((err) => sendErr(request.id, err.message))
+        .then(() => { sendSuccess(request.id) })
+        .catch(err => sendErr(request.id, err.message))
+      break
 
     case "move":
       browser.tabs.move(request.tabId, request.props)
-        .then(sendSuccess(request.id))
-        .catch((err) => sendErr(request.id, err.message))
+        .then(() => { sendSuccess(request.id) })
+        .catch(err => sendErr(request.id, err.message))
+      break
 
     case "reload":
       browser.tabs.reload(request.tabId, request.props)
-        .then(sendSuccess(request.id))
-        .catch((err) => sendErr(request.id, err.message))
+        .then(() => { sendSuccess(request.id) })
+        .catch(err => sendErr(request.id, err.message))
+      break
 
     case "remove":
       browser.tabs.remove(request.tabIds)
-        .then(sendSuccess(request.id))
-        .catch((err) => sendErr(request.id, err.message))
+        .then(() => { sendSuccess(request.id) })
+        .catch((err) => { sendErr(request.id, err.message) })
+      break
 
     case "discard":
       browser.tabs.discard(request.tabIds)
-        .then(sendSuccess(request.id))
-        .catch((err) => sendErr(request.id, err.message))
+        .then(() => { sendSuccess(request.id) })
+        .catch((err) => { sendErr(request.id, err.message) })
+      break
 
     // requires "tabHide" permission
     case "hide":
       browser.tabs.hide(request.tabIds)
-        .then(sendSuccess(request.id))
-        .catch((err) => sendErr(request.id, err.message))
+        .then(() => { sendSuccess(request.id) })
+        .catch(err => sendErr(request.id, err.message))
+      break
 
     case "show":
       browser.tabs.show(request.tabIds)
-        .then(sendSuccess(request.id))
-        .catch((err) => sendErr(request.id, err.message))
+        .then(() => sendSuccess(request.id))
+        .catch(err => sendErr(request.id, err.message))
+      break
 
     case "toggleReaderMode":
       browser.tabs.toggleReaderMode(request.tabId)
-        .then(sendSuccess(request.id))
-        .catch((err) => sendErr(request.id, err.message))
+        .then(() => sendSuccess(request.id))
+        .catch(err => sendErr(request.id, err.message))
+      break
 
     case "goForward":
       browser.tabs.goForward(request.tabId)
-        .then(sendSuccess(request.id))
-        .catch((err) => sendErr(request.id, err.message))
+        .then(() => sendSuccess(request.id))
+        .catch(err => sendErr(request.id, err.message))
+      break
 
     case "goBack":
       browser.tabs.goBack(request.tabId)
-        .then(sendSuccess(request.id))
-        .catch((err) => sendErr(request.id, err.message))
+        .then(() => sendSuccess(request.id))
+        .catch(err => sendErr(request.id, err.message))
+      break
 
     default:
       sendErr(request.id, `Action ${request.Action} is unknown`)
