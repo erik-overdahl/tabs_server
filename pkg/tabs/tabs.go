@@ -239,3 +239,13 @@ func (s *TabStore) Get(id int) (*Tab, error) {
 	}
 	return nil, fmt.Errorf("Tab with id %d not found", id)
 }
+
+func (s *TabStore) List() []*Tab {
+	tabList := make([]*Tab, len(s.Open), len(s.Open))
+	i := 0
+	for _, tab := range s.Open {
+		tabList[i] = tab
+		i++
+	}
+	return tabList
+}

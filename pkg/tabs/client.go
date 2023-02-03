@@ -80,6 +80,22 @@ func (client *TabsClient) ConnectBrowserGateway() error {
 	return nil
 }
 
+func (client *TabsClient) GetList() ([]*Tab, error) {
+	response, err := client.Request(&Request{
+		Method: "list",
+	})
+	if err != nil {
+		return nil, err
+	} else if response.Status != "success" {
+		return nil, fmt.Errorf("Browser responded: %s: %s", response.Status, string(response.Info))
+	}
+	var tabList []*Tab
+	if err := json.Unmarshal(response.Info, &tabList); err != nil {
+		return nil, err
+	}
+	return tabList, nil
+}
+
 func (client *TabsClient) Activate(tabId int) error {
 	if response, err := client.Request(&Request{
 		Method: "update",
@@ -88,7 +104,7 @@ func (client *TabsClient) Activate(tabId int) error {
 	}); err != nil {
 		return err
 	} else if response.Status != "success" {
-		return fmt.Errorf("Browser responded: %s: %v", response.Status, response.Info)
+		return fmt.Errorf("Browser responded: %s: %s", response.Status, string(response.Info))
 	}
 	return nil
 }

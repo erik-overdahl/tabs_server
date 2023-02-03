@@ -191,18 +191,16 @@ func (g *Gateway) listenConn(conn net.Conn) {
 		}
 		switch request.Method {
 		case "list":
-			currentTabs := make([]*Tab, len(g.tabs.Open), len(g.tabs.Open))
-			i := 0
-			for _, tab := range g.tabs.Open {
-				currentTabs[i] = tab
-				i++
-			}
+			var response *Response
+			currentTabs := g.tabs.List()
 			if content, err := json.Marshal(currentTabs); err != nil {
-				log.Printf("ERROR: Failed to list tabs: %v", err)
+				errMsg := fmt.Sprintf("ERROR: Failed to list tabs: %v", err)
+				log.Printf(errMsg)
+				response = &Response{ID: request.ID, Status: "error", Info: []byte(errMsg)}
 			} else {
-				response := &Message{Response: &Response{ID: request.ID, Status: "list", Info: content}}
-				SendMsg(conn, response)
+				response = &Response{ID: request.ID, Status: "success", Info: content}
 			}
+			SendMsg(conn, &Message{Response: response})
 		default:
 			responseChan := make(chan *Message)
 			g.requests[request.ID] = responseChan

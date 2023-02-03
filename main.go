@@ -2,7 +2,6 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -34,16 +33,12 @@ func main() {
 
 		client.ConnectBrowserGateway()
 
-		if response, err := client.Request(&tabs.Request{Method: "list"}); err != nil {
+		tabList, err := client.GetList()
+		if err != nil {
 			log.Fatalf("Failed to get list of tabs: %v", err)
-		} else {
-			var tabList []*tabs.Tab
-			if err := json.Unmarshal(response.Info, &tabList); err != nil {
-				log.Fatalf("Unable to read tab list: %v", err)
-			}
-			for _, tab := range tabList {
-				store.Open[tab.ID] = tab
-			}
+		}
+		for _, tab := range tabList {
+			store.Open[tab.ID] = tab
 		}
 
 		scanner := bufio.NewScanner(os.Stdin)
