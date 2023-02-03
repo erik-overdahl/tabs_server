@@ -50,18 +50,18 @@ type Tab struct {
 }
 
 type TabDelta struct {
-	Attention    *bool         `json:"attention"`
-	Audible      *bool         `json:"audible"`
-	Discarded    *bool         `json:"discarded"`
-	FavIconUrl   *string       `json:"favIconUrl"`
-	Hidden       *bool         `json:"hidden"`
-	IsArticle    *bool         `json:"isArticle"`
-	MutedInfo    *MutedInfo    `json:"mutedInfo"`
-	Pinned       *bool         `json:"pinned"`
-	SharingState *SharingState `json:"sharingState"`
-	Status       *string       `json:"status"`
-	Title        *string       `json:"title"`
-	Url          *string       `json:"url"`
+	Attention    *bool         `json:"attention,omitempty"`
+	Audible      *bool         `json:"audible,omitempty"`
+	Discarded    *bool         `json:"discarded,omitempty"`
+	FavIconUrl   *string       `json:"favIconUrl,omitempty"`
+	Hidden       *bool         `json:"hidden,omitempty"`
+	IsArticle    *bool         `json:"isArticle,omitempty"`
+	MutedInfo    *MutedInfo    `json:"mutedInfo,omitempty"`
+	Pinned       *bool         `json:"pinned,omitempty"`
+	SharingState *SharingState `json:"sharingState,omitempty"`
+	Status       *string       `json:"status,omitempty"`
+	Title        *string       `json:"title,omitempty"`
+	Url          *string       `json:"url,omitempty"`
 }
 
 // Events
