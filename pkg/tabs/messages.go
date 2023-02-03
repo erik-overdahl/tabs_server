@@ -132,7 +132,7 @@ func ReadMsg(r io.Reader) (*Message, error) {
 	return msg, nil
 }
 
-func SendMsg(w io.Writer, msg Message) error {
+func SendMsg(w io.Writer, msg *Message) error {
 	// add size if not already there
 	buf, err := json.Marshal(msg)
 	if err != nil {

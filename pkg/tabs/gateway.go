@@ -59,7 +59,7 @@ func (g *Gateway) Start() {
 	// send messages from all connections to stdout
 	go func(){
 		for msg := range g.outStream {
-			if err := SendMsg(os.Stdout, *msg); err != nil {
+			if err := SendMsg(os.Stdout, msg); err != nil {
 				log.Fatalf("Failed to write to stdout (???): %v", err)
 			}
 		}
@@ -67,7 +67,7 @@ func (g *Gateway) Start() {
 
 	go func() {
 		for msg := range g.inStream {
-			if err := g.handleMessage(*msg); err != nil {
+			if err := g.handleMessage(msg); err != nil {
 				log.Printf("ERROR: handling msg: %v", err)
 			}
 		}
@@ -120,23 +120,23 @@ func (g *Gateway) Start() {
    Otherwise, it is a response to a request we sent, and we route it
    appropriately
   */
-func (g *Gateway) handleMessage(msg Message) error {
+func (g *Gateway) handleMessage(msg *Message) error {
 	switch {
 	case msg.Request != nil:
-		g.outStream <- &msg
+		g.outStream <- msg
 	case msg.Response != nil:
 		response := msg.Response
 		if responseChan, exists := g.requests[response.ID]; !exists {
 			return fmt.Errorf("Received response for non-outstanding request")
 		} else {
 			delete(g.requests, response.ID)
-			responseChan <- &msg
+			responseChan <- msg
 		}
 	case msg.Event != nil:
 		msg.Event.Apply(g.tabs)
 		for _, conn := range g.connections {
-			b, _ := msg.MarshalJSON()
-			log.Println("FORWARDING: ", string(b))
+			// b, _ := json.Marshal(msg)
+			// log.Println("FORWARDING: ", string(b))
 			if err := SendMsg(conn, msg); err != nil {
 				log.Printf("ERROR: Failed to send msg to %v: %v", conn, err)
 			}
@@ -200,7 +200,7 @@ func (g *Gateway) listenConn(conn net.Conn) {
 			if content, err := json.Marshal(currentTabs); err != nil {
 				log.Printf("ERROR: Failed to list tabs: %v", err)
 			} else {
-				response := Message{Response: &Response{ID: request.ID, Status: "list", Info: content}}
+				response := &Message{Response: &Response{ID: request.ID, Status: "list", Info: content}}
 				SendMsg(conn, response)
 			}
 		default:
@@ -208,8 +208,8 @@ func (g *Gateway) listenConn(conn net.Conn) {
 			g.requests[request.ID] = responseChan
 			go func(resp chan *Message) {
 				g.outStream <- msg
-				response := <-responseChan
-				SendMsg(conn, *response)
+				response := <-resp
+				SendMsg(conn, response)
 			}(responseChan)
 		}
 	}

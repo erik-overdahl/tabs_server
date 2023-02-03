@@ -262,7 +262,7 @@ func (client *TabsClient) Request(msg *Request) (*Response, error) {
 	msg.ID = uuid.New()
 	client.requests[msg.ID] = responseChan
 
-	SendMsg(client.gatewayConn, Message{Request: msg})
+	SendMsg(client.gatewayConn, &Message{Request: msg})
 
 	select {
 	case <-ctx.Done():
