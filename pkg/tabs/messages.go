@@ -10,20 +10,100 @@ import (
 	"github.com/google/uuid"
 )
 
-type Message struct {
-	ID      uuid.UUID       `json:"id"`
-	Action  string          `json:"action"`
-	Content json.RawMessage `json:"content"`
+type Response struct {
+	ID     uuid.UUID       `json:"id"`
+	Status string          `json:"status"`
+	Info   json.RawMessage `json:"info,omitempty"`
 }
 
-type EmptyObj map[string]any
+type Request struct {
+	ID     uuid.UUID `json:"id"`
+	Method string    `json:"method"`
+	TabId  int       `json:"tabId,omitempty"`
+	TabIds []int     `json:"tabIds,omitempty"`
+	Props  any       `json:"props,omitempty"`
+}
 
-func MakeMessage(action string, content any) *Message {
-	contentBuf, _ := json.Marshal(content)
-	return &Message{
-		ID:      uuid.New(),
-		Action:  action,
-		Content: contentBuf,
+type rawMessage struct {
+	Type string          `json:"type"`
+	Data json.RawMessage `json:"data"`
+}
+
+type Message struct {
+	Response *Response
+	Request  *Request
+	Event    Event
+}
+
+func (msg *Message) MarshalJSON() ([]byte, error) {
+	var msgType string
+	var content any
+	switch {
+	case msg.Request != nil:
+		msgType = "request"
+		content = msg.Request
+	case msg.Response != nil:
+		msgType = "response"
+		content = msg.Response
+	case msg.Event != nil:
+		msgType = "event"
+		log.Printf("Marshaling event: %v", msg.Event)
+		eventBytes, err := json.Marshal(msg.Event)
+		if err != nil {
+			return nil, err
+		}
+		content = rawMessage{Type: msg.Event.Name(), Data: eventBytes}
+	}
+	data, err := json.Marshal(content)
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(rawMessage{Type: msgType, Data: data})
+}
+
+func (msg *Message) UnmarshalJSON(data []byte) error {
+	var raw rawMessage
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+	switch raw.Type {
+	case "request":
+		msg.Request = &Request{}
+		return json.Unmarshal(raw.Data, msg.Request)
+	case "response":
+		msg.Response = &Response{}
+		return json.Unmarshal(raw.Data, msg.Response)
+	case "event":
+		var rawEvent rawMessage
+		if err := json.Unmarshal(raw.Data, &rawEvent); err != nil {
+			return err
+		}
+		var event Event
+		switch rawEvent.Type {
+		case "activated":
+			event = &ActivatedMsg{}
+		case "updated":
+			event = &UpdatedMsg{}
+		case "created":
+			event = &CreatedMsg{}
+		case "removed":
+			event = &RemovedMsg{}
+		case "moved":
+			event = &MovedMsg{}
+		case "attached", "detached":
+			event = &AttachedMsg{}
+		default:
+			return fmt.Errorf("Event of unknown type: %s", rawEvent.Type)
+		}
+		log.Printf("Unmarshaling to event: %s", string(raw.Data))
+		if err := json.Unmarshal(rawEvent.Data, &event); err != nil {
+			return err
+		}
+		log.Printf("Unmarshalled to: %v", event)
+		msg.Event = event
+		return nil
+	default:
+		return fmt.Errorf("Message of unknown type: %s", raw.Type)
 	}
 }
 
@@ -45,8 +125,10 @@ func ReadMsg(r io.Reader) (*Message, error) {
 	}
 	msg := &Message{}
 	if err := json.Unmarshal(buf[4:], msg); err != nil {
+		log.Println(err)
 		return nil, err
 	}
+	log.Println("RECEIVED:", msg)
 	return msg, nil
 }
 
@@ -61,18 +143,4 @@ func SendMsg(w io.Writer, msg Message) error {
 	buf = append(size, buf...)
 	_, err = w.Write(buf)
 	return err
-}
-
-func CastAndCall[T any](content json.RawMessage, f func(*T) error) error {
-	var msg T
-	if err := json.Unmarshal(content, &msg); err != nil {
-		return fmt.Errorf("ERROR: Failed to parse message content: %v", err)
-	}
-	log.Printf("RECEIVED: %#v", msg)
-	return f(&msg)
-}
-
-func handleBrowserError(err *string) error {
-	log.Printf("Browser returned error: %s", *err)
-	return nil
 }

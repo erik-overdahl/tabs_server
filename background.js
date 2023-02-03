@@ -15,6 +15,14 @@ function reconnect() {
 
 port = reconnect()
 
+function handleMsg(msg) {
+  if (msg.type === "request") {
+      handleRequest(msg.data)
+  } else {
+      console.log("ERROR: unexpected msg from gateway:", msg)
+      sendErr(nil, "ERROR: unexpected msg from gateway:" + JSON.stringify(msg))
+  }
+}
 
 /*
 messages sent from the external server will have
@@ -24,124 +32,114 @@ messages sent from the external server will have
     specified by `action`
  */
 
-function sendErr(id, err) {
+function sendResponse(id, status, info) {
   msg = {
-    action: "error",
-    id: id,
-    content: err.message,
-  }
-  console.log(msg)
-  port.postMessage(msg)
+    type: "response",
+    data: {
+      id: id,
+      status: status,
+      info: info,
+    }}
+  console.log("SENDING:", msg)
+  return port.postMessage(msg)
+}
+
+function sendErr(id, message) {
+  sendResponse(id, "error", message)
 }
 
 function sendSuccess(id, content = {}) {
-  port.postMessage({
-    action: "success",
-    id: id,
-    content: content,
-  })
+  sendResponse(id, "success", content)
 }
 
-function handleMsg(msg) {
-  console.log("Received:", msg)
-  if (!msg.id) {
+// request: {id: uuid, tabId: Optional[int], tabIds: Optional[[]int], props: Optional[{}]}
+function handleRequest(request) {
+  console.log("Received:", request)
+  if (!request.id) {
     sendErr(nil, "Received message with no id")
     return
   }
-  if (!msg.action) {
-    sendErr(msg.id, "Received message with no action")
+  if (!request.method) {
+    sendErr(request.id, "Received message with no action")
     return
   }
 
-  const args = msg.content
-
-  switch (msg.action) {
+  switch (request.method) {
     case "list":
       // is it possible this could return too much data?
       browser.tabs.query({})
-        .then(result => {
-          console.log("SENDING: list")
-          port.postMessage({
-            action: "list",
-            id: msg.id,
-            content: result
-          })})
-        .catch(err => sendErr(msg.id, err))
+             .then((result) => sendResponse(request.id, "list", result))
+             .catch((err) => sendErr(request.id, err.message))
 
     case "query":
       // is it possible this could return too much data?
-      browser.tabs.query(args)
-        .then(result =>
-          port.postMessage({
-            action: "query",
-            id: msg.id,
-            content: result
-          }))
-        .catch(err => sendErr(msg.id, err))
+      browser.tabs.query(request.props)
+        .then((result) => sendResponse(request.id, "query", result))
+        .catch((err) => sendErr(request.id, err.message))
 
     case "create":
-      browser.tabs.create(args)
-        .then(tab => sendSuccess(msg.id, tab.id))
-        .catch(err => sendErr(msg.id, err))
+      browser.tabs.create(request.props)
+        .then(tab => sendSuccess(request.id, tab.id))
+        .catch((err) => sendErr(request.id, err.message))
 
     case "duplicate":
-      browser.tabs.duplicate(args.tabId, args.props)
-        .then(tab => sendSuccess(msg.id, tab.id))
-        .catch(err => sendErr(msg.id, err))
+      browser.tabs.duplicate(request.tabId, request.props)
+        .then(tab => sendSuccess(request.id, tab.id))
+        .catch((err) => sendErr(request.id, err.message))
 
     case "update":
-      browser.tabs.update(args.tabId, args.delta)
-        .then(sendSuccess(msg.id))
-        .catch(err => sendErr(msg.id, err))
+      browser.tabs.update(request.tabId, request.props)
+        .then(sendSuccess(request.id))
+        .catch((err) => sendErr(request.id, err.message))
 
     case "move":
-      browser.tabs.move(args.tabId, args.props)
-        .then(sendSuccess(msg.id))
-        .catch(err => sendErr(msg.id, err))
+      browser.tabs.move(request.tabId, request.props)
+        .then(sendSuccess(request.id))
+        .catch((err) => sendErr(request.id, err.message))
 
     case "reload":
-      browser.tabs.reload(args.tabId, { bypassCache: args.bypassCache })
-        .then(sendSuccess(msg.id))
-        .catch(err => sendErr(msg.id, err))
+      browser.tabs.reload(request.tabId, request.props)
+        .then(sendSuccess(request.id))
+        .catch((err) => sendErr(request.id, err.message))
 
     case "remove":
-      browser.tabs.remove(args)
-        .then(sendSuccess(msg.id))
-        .catch(err => sendErr(msg.id, err))
+      browser.tabs.remove(request.tabIds)
+        .then(sendSuccess(request.id))
+        .catch((err) => sendErr(request.id, err.message))
 
     case "discard":
-      browser.tabs.discard(args)
-        .then(sendSuccess(msg.id))
-        .catch(err => sendErr(msg.id, err))
+      browser.tabs.discard(request.tabIds)
+        .then(sendSuccess(request.id))
+        .catch((err) => sendErr(request.id, err.message))
 
     // requires "tabHide" permission
     case "hide":
-      browser.tabs.hide(args)
-        .then(sendSuccess(msg.id))
-        .catch(err => sendErr(msg.id, err))
+      browser.tabs.hide(request.tabIds)
+        .then(sendSuccess(request.id))
+        .catch((err) => sendErr(request.id, err.message))
 
     case "show":
-      browser.tabs.show(args)
-        .then(sendSuccess(msg.id))
-        .catch(err => sendErr(msg.id, err))
+      browser.tabs.show(request.tabIds)
+        .then(sendSuccess(request.id))
+        .catch((err) => sendErr(request.id, err.message))
 
     case "toggleReaderMode":
-      browser.tabs.toggleReaderMode(args)
-        .then(sendSuccess(msg.id))
-        .catch(err => sendErr(msg.id, err))
+      browser.tabs.toggleReaderMode(request.tabId)
+        .then(sendSuccess(request.id))
+        .catch((err) => sendErr(request.id, err.message))
 
     case "goForward":
-      browser.tabs.goForward(args)
-        .then(sendSuccess(msg.id))
-        .catch(err => sendErr(msg.id, err))
+      browser.tabs.goForward(request.tabId)
+        .then(sendSuccess(request.id))
+        .catch((err) => sendErr(request.id, err.message))
 
     case "goBack":
-      browser.tabs.goBack(args)
-        .then(sendSuccess(msg.id))
-        .catch(err => sendErr(msg.id, err))
+      browser.tabs.goBack(request.tabId)
+        .then(sendSuccess(request.id))
+        .catch((err) => sendErr(request.id, err.message))
 
     default:
-      sendErr(msg.id, `Action ${msg.Action} is unknown`)
+      sendErr(request.id, `Action ${request.Action} is unknown`)
   }
 // captureTab
 // captureVisibleTab
@@ -156,104 +154,85 @@ function handleMsg(msg) {
 // getZoomSettings
 }
 
+function sendEvent(type, data) {
+  msg = {
+    type: "event",
+    data: {
+      type: type,
+      data: data,
+    }
+  }
+  console.log(`EVENT: ${type}:`, data)
+  port.postMessage(msg)
+}
+
 /* activeInfo {tabId, previousTabId, windowId} */
 browser.tabs.onActivated.addListener(
-  (activeInfo) => {
-    console.log("Tab activated:", activeInfo)
-    port.postMessage({
-      action: "activated",
-      content: {
-        tabId: activeInfo.tabId,
-        previous: activeInfo.previousTabId,
-        windowId: activeInfo.windowId
-      }
+  (activeInfo) => sendEvent(
+    "activated",
+    {
+      tabId: activeInfo.tabId,
+      previous: activeInfo.previousTabId,
+      windowId: activeInfo.windowId
     })
-  }
 )
 
 /* changeInfo contains the tab properties that changed */
 browser.tabs.onUpdated.addListener(
-  (tabId, changeInfo, tab) => {
-    console.log("Tab updated:", tabId, changeInfo)
-    port.postMessage({
-      action: "updated",
-      content: {
-        tabId: tabId,
-        delta: changeInfo,
-      }
+  (tabId, changeInfo, tab) => sendEvent(
+    "updated",
+    {
+      tabId: tabId,
+      delta: changeInfo,
     })
-  }
 )
 
 browser.tabs.onCreated.addListener(
-  (tab) => {
-    console.log("Tab created:", tab)
-    port.postMessage({
-      action: "created",
-      content: tab,
-    })
-  }
-)
+  (tab) => sendEvent("created", tab))
 
 /* moveInfo {windowId, fromIndex, toIndex} */
 browser.tabs.onMoved.addListener(
-  (tabId, moveInfo) => {
-    console.log("Tab moved:", tabId, moveInfo)
-    port.postMessage({
-      action: "moved",
-      content: {
-        tabId: tabId,
-        windowId: moveInfo.windowId,
-        fromIndex: moveInfo.fromIndex,
-        toIndex: moveInfo.toIndex,
-      }
+  (tabId, moveInfo) => sendEvent(
+    "moved",
+    {
+      tabId: tabId,
+      windowId: moveInfo.windowId,
+      fromIndex: moveInfo.fromIndex,
+      toIndex: moveInfo.toIndex,
     })
-  }
 )
 
 /* removeInfo {windowId, isWindowClosing} */
 browser.tabs.onRemoved.addListener(
-  (tabId, removeInfo) => {
-    console.log("Tab removed:", tabId, removeInfo)
-    port.postMessage({
-      action: "removed",
-      content: {
-        tabId: tabId,
-        windowId: removeInfo.windowId,
-        isWindowClosing: removeInfo.isWindowClosing,
-      }
+  (tabId, removeInfo) => sendEvent(
+    "removed",
+    {
+      tabId: tabId,
+      windowId: removeInfo.windowId,
+      isWindowClosing: removeInfo.isWindowClosing,
     })
-  }
 )
 
 /* attachInfo {newWindowId, newPosition} */
 browser.tabs.onAttached.addListener(
-  (tabId, info) => {
-    console.log("Tab attached:", tabId, info)
-    port.postMessage({
-      action: "attached",
-      content: {
-        tabId: tabId,
-        windowId: info.oldWindowId,
-        position: info.oldPosition,
-      }
+  (tabId, info) => sendEvent(
+    "attached",
+    {
+      tabId: tabId,
+      windowId: info.oldWindowId,
+      position: info.oldPosition,
     })
-  }
 )
 
 /* detachInfo {oldWindowId, oldPosition} */
 browser.tabs.onDetached.addListener(
-  (tabId, info) => {
-    console.log("Tab detached:", tabId, info)
-    port.postMessage({
-      action: "detached",
-      content: {
-        tabId: tabId,
-        windowId: info.oldWindowId,
-        position: info.oldPosition,
-      }
+  (tabId, info) => sendEvent(
+    "detached",
+    {
+      tabId: tabId,
+      windowId: info.oldWindowId,
+      position: info.oldPosition,
     })
-  }
 )
 
 

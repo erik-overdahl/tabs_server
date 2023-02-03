@@ -64,97 +64,45 @@ type TabDelta struct {
 	Url          *string       `json:"url"`
 }
 
+// Events
+
+type Event interface {
+	Name() string
+	Apply(*TabStore) error
+}
+
+type CreatedMsg Tab
+
+func (_ *CreatedMsg) Name() string {
+	return "created"
+}
+
+func (msg *CreatedMsg) Apply(store *TabStore) error {
+	tab := Tab(*msg)
+	_, err := store.Get(tab.ID)
+	if err == nil {
+		return fmt.Errorf("ERROR: Create: Tab with id %d already exists", tab.ID)
+	}
+	store.Open[tab.ID] = &tab
+	return nil
+}
+
 type ActivatedMsg struct {
 	TabId    int `json:"tabId"`
 	Previous int `json:"previous"`
 	WindowId int `json:"windowId"`
 }
 
-type UpdatedMsg struct {
-	TabId int       `json:"tabId"`
-	Delta TabDelta  `json:"delta"`
+func (_ *ActivatedMsg) Name() string {
+	return "activated"
 }
 
-type MovedMsg struct {
-	TabId     int `json:"tabId"`
-	WindowId  int `json:"windowId"`
-	FromIndex int `json:"fromIndex"`
-	ToIndex   int `json:"toIndex"`
-}
-
-type RemovedMsg struct {
-	TabId           int  `json:"tabId"`
-	WindowId        int  `json:"windowId"`
-	IsWindowClosing bool `json:"isWindowClosing"`
-}
-
-type AttachedMsg struct {
-	TabId    int `json:"tabId"`
-	WindowId int `json:"windowId"`
-	Position int `json:"position"`
-}
-
-type TabStore struct {
-	Open   map[int]*Tab
-	Closed []*Tab
-}
-
-func MakeTabStore() *TabStore {
-	return &TabStore{Open: make(map[int]*Tab), Closed: []*Tab{}}
-}
-
-func (s *TabStore) Apply(msg *Message) error {
-	switch msg.Action {
-	case "error":
-		return CastAndCall(msg.Content, handleBrowserError)
-	case "list":
-		return CastAndCall(msg.Content, func(tabs *[]*Tab) error {
-			for _, tab := range *tabs {
-				if err := s.Add(tab); err != nil {
-					return err
-				}
-			}
-			return nil
-		})
-	case "created":
-		return CastAndCall(msg.Content, s.Add)
-	case "activated":
-		return CastAndCall(msg.Content, s.Activate)
-	case "updated":
-		return CastAndCall(msg.Content, s.Update)
-	case "moved":
-		return CastAndCall(msg.Content, s.Move)
-	case "removed":
-		return CastAndCall(msg.Content, s.Remove)
-	case "attached", "detached":
-		return CastAndCall(msg.Content, s.WindowChange)
-	default:
-		return fmt.Errorf("Msg received from gateway with unknown action: %s", msg.Action)
-	}
-}
-
-func (s *TabStore) Get(id int) (*Tab, error) {
-	if tab, exists := s.Open[id]; exists {
-		return tab, nil
-	}
-	return nil, fmt.Errorf("Tab with id %d not found", id)
-}
-
-func (s *TabStore) Add(tab *Tab) error {
-	_, err := s.Get(tab.ID)
-	if err == nil {
-		return fmt.Errorf("ERROR: Create: Tab with id %d already exists", tab.ID)
-	}
-	s.Open[tab.ID] = tab
-	return nil
-}
-
-func (s *TabStore) Activate(msg *ActivatedMsg) error {
+func (msg *ActivatedMsg) Apply(store *TabStore) error {
 	// do we care if the previously active tab isn't found?
-	if previous, exists := s.Open[msg.Previous]; exists {
+	if previous, exists := store.Open[msg.Previous]; exists {
 		previous.Active = false
 	}
-	tab, err := s.Get(msg.TabId)
+	tab, err := store.Get(msg.TabId)
 	if err != nil {
 		return fmt.Errorf("ERROR: Activate: %v", err)
 	}
@@ -162,8 +110,17 @@ func (s *TabStore) Activate(msg *ActivatedMsg) error {
 	return nil
 }
 
-func (s *TabStore) Update(msg *UpdatedMsg) error {
-	tab, err := s.Get(msg.TabId)
+type UpdatedMsg struct {
+	TabId int       `json:"tabId"`
+	Delta TabDelta  `json:"delta"`
+}
+
+func (_ *UpdatedMsg) Name() string {
+	return "updated"
+}
+
+func (msg *UpdatedMsg) Apply(store *TabStore) error {
+	tab, err := store.Get(msg.TabId)
 	if err != nil {
 		return fmt.Errorf("ERROR: Update: %v", err)
 	}
@@ -207,8 +164,19 @@ func (s *TabStore) Update(msg *UpdatedMsg) error {
 	return nil
 }
 
-func (s *TabStore) Move(msg *MovedMsg) error {
-	tab, err := s.Get(msg.TabId)
+type MovedMsg struct {
+	TabId     int `json:"tabId"`
+	WindowId  int `json:"windowId"`
+	FromIndex int `json:"fromIndex"`
+	ToIndex   int `json:"toIndex"`
+}
+
+func (_ *MovedMsg) Name() string {
+	return "updated"
+}
+// do reshuffled tabs get moved?
+func (msg *MovedMsg) Apply(store *TabStore) error {
+	tab, err := store.Get(msg.TabId)
 	if err != nil {
 		return fmt.Errorf("ERROR: Move: %v", err)
 	}
@@ -216,23 +184,58 @@ func (s *TabStore) Move(msg *MovedMsg) error {
 	return nil
 }
 
-// Probably not the way we want to handle this overall
-func (s *TabStore) Remove(msg *RemovedMsg) error {
-	tab, err := s.Get(msg.TabId)
+type RemovedMsg struct {
+	TabId           int  `json:"tabId"`
+	WindowId        int  `json:"windowId"`
+	IsWindowClosing bool `json:"isWindowClosing"`
+}
+
+func (_ *RemovedMsg) Name() string {
+	return "removed"
+}
+
+func (msg *RemovedMsg) Apply(store *TabStore) error {
+	tab, err := store.Get(msg.TabId)
 	if err != nil {
 		return fmt.Errorf("ERROR: Remove: %v", err)
 	}
-	s.Closed = append(s.Closed, tab)
-	delete(s.Open, tab.ID)
+	store.Closed = append(store.Closed, tab)
+	delete(store.Open, tab.ID)
 	return nil
 }
 
-func (s *TabStore) WindowChange(msg *AttachedMsg) error {
-	tab, err := s.Get(msg.TabId)
+type AttachedMsg struct {
+	TabId    int `json:"tabId"`
+	WindowId int `json:"windowId"`
+	Position int `json:"position"`
+}
+
+func (_ *AttachedMsg) Name() string {
+	return "attached"
+}
+
+func (msg *AttachedMsg) Apply(store *TabStore) error {
+	tab, err := store.Get(msg.TabId)
 	if err != nil {
 		return fmt.Errorf("ERROR: WindowChange: %v", err)
 	}
 	tab.WindowId = msg.WindowId
 	tab.Index = msg.Position
 	return nil
+}
+
+type TabStore struct {
+	Open   map[int]*Tab
+	Closed []*Tab
+}
+
+func MakeTabStore() *TabStore {
+	return &TabStore{Open: make(map[int]*Tab), Closed: []*Tab{}}
+}
+
+func (s *TabStore) Get(id int) (*Tab, error) {
+	if tab, exists := s.Open[id]; exists {
+		return tab, nil
+	}
+	return nil, fmt.Errorf("Tab with id %d not found", id)
 }

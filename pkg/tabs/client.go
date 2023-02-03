@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"log"
 	"net"
@@ -59,13 +60,13 @@ type ReloadProperties struct {
 }
 
 type TabsClient struct {
-	Updates     chan *Message
+	Updates     chan Event
 	gatewayConn net.Conn
-	requests    map[uuid.UUID]chan *Message
+	requests    map[uuid.UUID]chan *Response
 }
 
 func MakeTabsClient() *TabsClient {
-	return &TabsClient{Updates: make(chan *Message), requests: map[uuid.UUID]chan *Message{}}
+	return &TabsClient{Updates: make(chan Event), requests: map[uuid.UUID]chan *Response{}}
 }
 
 func (client *TabsClient) ConnectBrowserGateway() error {
@@ -80,127 +81,188 @@ func (client *TabsClient) ConnectBrowserGateway() error {
 }
 
 func (client *TabsClient) Activate(tabId int) error {
-	_, err := client.Request(*MakeMessage(
-		"update",
-		map[string]any{
-			"tabId": tabId,
-			"delta": map[string]any{
-				"active": true,
-			},
-		},
-	))
-	return err
+	if response, err := client.Request(&Request{
+		Method: "update",
+		TabId: tabId,
+		Props: &UpdateProperties{Active: ptr(true)},
+	}); err != nil {
+		return err
+	} else if response.Status != "success" {
+		return fmt.Errorf("Browser responded: %s: %v", response.Status, response.Info)
+	}
+	return nil
 }
 
 func (client *TabsClient) Create(props CreateProperties) (int, error) {
-	resp, err := client.Request(*MakeMessage("create", props))
+	response, err := client.Request(&Request{
+		Method: "create",
+		Props: &props,
+	})
 	if err != nil {
 		return -1, err
+	} else if response.Status != "success" {
+		return -1, fmt.Errorf("Browser responded: %s: %v", response.Status, response.Info)
 	}
-	var tabId int
-	if err := json.Unmarshal(resp.Content, &tabId); err != nil {
+	var newTabId int
+	if err := json.Unmarshal(response.Info, &newTabId); err != nil {
 		return -1, err
 	}
-	return tabId, nil
+	return newTabId, nil
 }
 
 func (client *TabsClient) Duplicate(tabId int, props *DuplicateProperties) (int, error) {
-	resp, err := client.Request(
-		*MakeMessage(
-			"duplicate",
-			map[string]any{
-				"tabId": tabId,
-				"props": props,
-			}))
+	response, err := client.Request(&Request{
+		Method: "duplicate",
+		TabId: tabId,
+		Props: props,
+	})
 	if err != nil {
 		return -1, err
+	} else if response.Status != "success" {
+		return -1, fmt.Errorf("Browser responded: %s: %v", response.Status, response.Info)
 	}
-	var newId int
-	if err := json.Unmarshal(resp.Content, &newId); err != nil {
+	var newTabId int
+	if err := json.Unmarshal(response.Info, &newTabId); err != nil {
 		return -1, err
 	}
-	return newId, nil
+	return newTabId, nil
 }
 
 func (client *TabsClient) Update(tabId int, props *UpdateProperties) error {
-	_, err := client.Request(
-		*MakeMessage(
-			"update",
-			map[string]any{
-				"tabId": tabId,
-				"props": props,
-			}))
-	return err
+	if response, err := client.Request(&Request{
+		Method: "update",
+		Props: props,
+	}); err != nil {
+		return err
+	} else if response.Status != "success" {
+		return fmt.Errorf("Browser responded: %s: %v", response.Status, response.Info)
+	}
+	return nil
 }
 
 func (client *TabsClient) Move(tabId int, props MoveProperties) error {
-	_, err := client.Request(
-		*MakeMessage(
-			"move",
-			map[string]any{
-				"tabId": tabId,
-				"props": props,
-			}))
-	return err
+	if response, err := client.Request(&Request{
+		Method: "move",
+		TabId: tabId,
+		Props: &props,
+	}); err != nil {
+		return err
+	} else if response.Status != "success" {
+		return fmt.Errorf("Browser responded: %s: %v", response.Status, response.Info)
+	}
+	return nil
 }
 
 func (client *TabsClient) Reload(tabId int, props *ReloadProperties) error {
-	_, err := client.Request(
-		*MakeMessage(
-			"reload",
-			map[string]any{
-				"tabId": tabId,
-				"props": props,
-			}))
-	return err
+	if response, err := client.Request(&Request{
+		Method: "reload",
+		TabId: tabId,
+		Props: &props,
+	}); err != nil {
+		return err
+	} else if response.Status != "success" {
+		return fmt.Errorf("Browser responded: %s: %v", response.Status, response.Info)
+	}
+	return nil
 }
 
 func (client *TabsClient) Close(tabId int, tabIds ...int) error {
-	_, err := client.Request(*MakeMessage("remove", append(tabIds, tabId)))
-	return err
+	if response, err := client.Request(&Request{
+		Method: "remove",
+		TabIds: append(tabIds, tabId),
+	}); err != nil {
+		return err
+	} else if response.Status != "success" {
+		return fmt.Errorf("Browser responded: %s: %v", response.Status, response.Info)
+	}
+	return nil
 }
 
 func (client *TabsClient) Discard(tabId int, tabIds ...int) error {
-	_, err := client.Request(*MakeMessage("discard", append(tabIds, tabId)))
-	return err
+	if response, err := client.Request(&Request{
+		Method: "discard",
+		TabIds: append(tabIds, tabId),
+	}); err != nil {
+		return err
+	} else if response.Status != "success" {
+		return fmt.Errorf("Browser responded: %s: %v", response.Status, response.Info)
+	}
+	return nil
 }
 
-
 func (client *TabsClient) Hide(tabId int, tabIds ...int) error {
-	_, err := client.Request(*MakeMessage("hide", append(tabIds, tabId)))
-	return err
+	if response, err := client.Request(&Request{
+		Method: "hide",
+		TabIds: append(tabIds, tabId),
+	}); err != nil {
+		return err
+	} else if response.Status != "success" {
+		return fmt.Errorf("Browser responded: %s: %v", response.Status, response.Info)
+	}
+	return nil
 }
 
 func (client *TabsClient) Show(tabId int, tabIds ...int) error {
-	_, err := client.Request(*MakeMessage("show", append(tabIds, tabId)))
-	return err
+	if response, err := client.Request(&Request{
+		Method: "show",
+		TabIds: append(tabIds, tabId),
+	}); err != nil {
+		return err
+	} else if response.Status != "success" {
+		return fmt.Errorf("Browser responded: %s: %v", response.Status, response.Info)
+	}
+	return nil
 }
 
 func (client *TabsClient) ToggleReaderMode(tabId int) error {
-	_, err := client.Request(*MakeMessage("toggleReaderMode", tabId))
-	return err
+	if response, err := client.Request(&Request{
+		Method: "toggleReaderMode",
+		TabId: tabId,
+	}); err != nil {
+		return err
+	} else if response.Status != "success" {
+		return fmt.Errorf("Browser responded: %s: %v", response.Status, response.Info)
+	}
+	return nil
 }
 
 func (client *TabsClient) GoBack(tabId int) error {
-	_, err := client.Request(*MakeMessage("goBack", tabId))
-	return err
+	if response, err := client.Request(&Request{
+		Method: "goBack",
+		TabId: tabId,
+	}); err != nil {
+		return err
+	} else if response.Status != "success" {
+		return fmt.Errorf("Browser responded: %s: %v", response.Status, response.Info)
+	}
+	return nil
 }
 
 func (client *TabsClient) GoForward(tabId int) error {
-	_, err := client.Request(*MakeMessage("goForward", tabId))
-	return err
+	if response, err := client.Request(&Request{
+		Method: "goForward",
+		TabId: tabId,
+	}); err != nil {
+		return err
+	} else if response.Status != "success" {
+		return fmt.Errorf("Browser responded: %s: %v", response.Status, response.Info)
+	}
+	return nil
 }
 
-func (client *TabsClient) Request(msg Message) (*Message, error) {
+func (client *TabsClient) Request(msg *Request) (*Response, error) {
 	if client.gatewayConn == nil {
 		return nil, errors.New("Cannot send request to closed gateway connection")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	responseChan := make(chan *Message)
+
+	responseChan := make(chan *Response)
+	msg.ID = uuid.New()
 	client.requests[msg.ID] = responseChan
-	SendMsg(client.gatewayConn, msg)
+
+	SendMsg(client.gatewayConn, Message{Request: msg})
 
 	select {
 	case <-ctx.Done():
@@ -219,12 +281,21 @@ func (client *TabsClient) listen() {
 		} else if err != nil {
 			log.Printf("ERROR: %#v", err)
 			continue
+
 		}
-		if msg.ID != uuid.Nil {
-			log.Printf("Received response for %s", msg.ID)
-			client.requests[msg.ID] <- msg
-		} else {
-			client.Updates <- msg
+		switch {
+		case msg.Response != nil:
+			response := msg.Response
+			log.Printf("Received response for %s", response.ID)
+			if responseChan, exists := client.requests[response.ID]; exists {
+				responseChan <- response
+			} else {
+				log.Printf("Received unexpected msg response: %v", response)
+			}
+		case msg.Event != nil:
+			client.Updates <- msg.Event
+		default:
+			log.Printf("Received unexpected msg: %v", msg)
 		}
 	}
 }

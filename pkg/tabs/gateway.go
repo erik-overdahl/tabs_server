@@ -26,9 +26,13 @@ var (
 type Gateway struct {
 	tabs        *TabStore
 	connections []net.Conn
-	requests	map[uuid.UUID]chan *Message
+	// receive Response and Events from browser
 	inStream    chan *Message
+	// send Requests from connections to browser
 	outStream   chan *Message
+	// since we will be forwarding these onward, send these as generic
+	// messages rather than Responses to avoid needless unwrap/rewrap
+	requests	map[uuid.UUID]chan *Message
 }
 
 func MakeGateway() *Gateway {
@@ -76,7 +80,7 @@ func (g *Gateway) Start() {
 			msg, err := ReadMsg(stdin)
 			if err == io.EOF {
 				log.Printf("Received EOF from browser")
-				break
+				os.Exit(0)
 			} else if err != nil {
 				log.Printf("ERROR: %#v", err)
 				continue
@@ -86,14 +90,23 @@ func (g *Gateway) Start() {
 	}()
 
 	responseChan := make(chan *Message)
-	request := MakeMessage("list", nil)
+	request := &Request{ID: uuid.New(), Method: "list"}
 	g.requests[request.ID] = responseChan
-	g.outStream <- request
+	g.outStream <- &Message{Request: request}
 
-	response := <-responseChan
-	g.tabs.Apply(response)
+	msg := <-responseChan
 	delete(g.requests, request.ID)
-
+	if msg.Response == nil || msg.Response.Status != "list" {
+		log.Fatalf("Unexpected response to initial query: %v", msg)
+	}
+	var tabs []*Tab
+	if err := json.Unmarshal(msg.Response.Info, &tabs); err != nil {
+		log.Fatalf("Unable to read tab list: %v", err)
+	}
+	log.Printf("Received %d tabs from browser", len(tabs))
+	for _, tab := range tabs {
+		g.tabs.Open[tab.ID] = tab
+	}
 	g.listenForConnections()
 }
 
@@ -108,23 +121,25 @@ func (g *Gateway) Start() {
    appropriately
   */
 func (g *Gateway) handleMessage(msg Message) error {
-	if msg.ID != uuid.Nil {
-		log.Printf("Msg for %s", msg.ID)
-		if responseChan, exists := g.requests[msg.ID]; !exists {
+	switch {
+	case msg.Request != nil:
+		g.outStream <- &msg
+	case msg.Response != nil:
+		response := msg.Response
+		if responseChan, exists := g.requests[response.ID]; !exists {
 			return fmt.Errorf("Received response for non-outstanding request")
 		} else {
-			delete(g.requests, msg.ID)
+			delete(g.requests, response.ID)
 			responseChan <- &msg
-			return nil
 		}
-	}
-	if err := g.tabs.Apply(&msg); err != nil {
-		return err
-	}
-	for _, conn := range g.connections {
-		log.Println("FORWARDING: ", conn)
-		if err := SendMsg(conn, msg); err != nil {
-			log.Printf("Failed to send msg to %v: %v", conn, err)
+	case msg.Event != nil:
+		msg.Event.Apply(g.tabs)
+		for _, conn := range g.connections {
+			b, _ := msg.MarshalJSON()
+			log.Println("FORWARDING: ", string(b))
+			if err := SendMsg(conn, msg); err != nil {
+				log.Printf("ERROR: Failed to send msg to %v: %v", conn, err)
+			}
 		}
 	}
 	return nil
@@ -169,7 +184,12 @@ func (g *Gateway) listenConn(conn net.Conn) {
 
 		// The gateway can respond immediately to Read requests
 		// and forwards Write requests to the browser
-		switch msg.Action {
+		request := msg.Request
+		if request == nil {
+			log.Printf("ERROR: Received non-request from client: %v", msg)
+			continue
+		}
+		switch request.Method {
 		case "list":
 			currentTabs := make([]*Tab, len(g.tabs.Open), len(g.tabs.Open))
 			i := 0
@@ -180,12 +200,12 @@ func (g *Gateway) listenConn(conn net.Conn) {
 			if content, err := json.Marshal(currentTabs); err != nil {
 				log.Printf("ERROR: Failed to list tabs: %v", err)
 			} else {
-				response := Message{ID: msg.ID, Action: msg.Action, Content: content}
+				response := Message{Response: &Response{ID: request.ID, Status: "list", Info: content}}
 				SendMsg(conn, response)
 			}
 		default:
 			responseChan := make(chan *Message)
-			g.requests[msg.ID] = responseChan
+			g.requests[request.ID] = responseChan
 			go func(resp chan *Message) {
 				g.outStream <- msg
 				response := <-responseChan

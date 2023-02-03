@@ -2,13 +2,13 @@ package main
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
 	"strconv"
 	"strings"
 
-	"github.com/google/uuid"
 	tabs "github.com/erik-overdahl/tabs_server/pkg/tabs"
 )
 
@@ -23,20 +23,28 @@ func main() {
 		gateway.Start()
 	case "client":
 		client := tabs.MakeTabsClient()
-		client.ConnectBrowserGateway()
-		response, err := client.Request(tabs.Message{ID: uuid.New(), Action: "list"})
-		if err != nil {
-			log.Fatalf("Failed to get list of tabs: %v", err)
-		}
-
 		store := tabs.MakeTabStore()
-		store.Apply(response)
 		go func(s *tabs.TabStore) {
 			log.Println("Listening for updates")
 			for update := range client.Updates {
-				s.Apply(update)
+				log.Printf("Received: %#v", update)
+				update.Apply(s)
 			}
 		}(store)
+
+		client.ConnectBrowserGateway()
+
+		if response, err := client.Request(&tabs.Request{Method: "list"}); err != nil {
+			log.Fatalf("Failed to get list of tabs: %v", err)
+		} else {
+			var tabList []*tabs.Tab
+			if err := json.Unmarshal(response.Info, &tabList); err != nil {
+				log.Fatalf("Unable to read tab list: %v", err)
+			}
+			for _, tab := range tabList {
+				store.Open[tab.ID] = tab
+			}
+		}
 
 		scanner := bufio.NewScanner(os.Stdin)
 		fmt.Print("> ")
