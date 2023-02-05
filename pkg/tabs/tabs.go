@@ -131,8 +131,8 @@ func (msg *UpdatedMsg) Apply(store *TabStore) error {
 	if d.Audible != nil {
 		tab.Audible = *d.Audible
 	}
-	if d.Pinned != nil {
-		tab.Pinned = *d.Pinned
+	if d.Discarded != nil {
+		tab.Discarded = *d.Discarded
 	}
 	if d.FavIconUrl != nil {
 		tab.FavIconUrl = *d.FavIconUrl
