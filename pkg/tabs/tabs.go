@@ -34,6 +34,7 @@ type Tab struct {
 	Url            string        `json:"url"`
 	Title          string        `json:"title"`
 	FavIconUrl     string        `json:"favIconUrl"`
+	FavIconFile    string		 `json:"favIconFile,omitempty"`
 	Status         string        `json:"status"`
 	Discarded      bool          `json:"discarded"`
 	Incognito      bool          `json:"incognito"`
@@ -54,6 +55,7 @@ type TabDelta struct {
 	Audible      *bool         `json:"audible,omitempty"`
 	Discarded    *bool         `json:"discarded,omitempty"`
 	FavIconUrl   *string       `json:"favIconUrl,omitempty"`
+	FavIconFile  *string	   `json:"favIconFile,omitempty"`
 	Hidden       *bool         `json:"hidden,omitempty"`
 	IsArticle    *bool         `json:"isArticle,omitempty"`
 	MutedInfo    *MutedInfo    `json:"mutedInfo,omitempty"`
@@ -136,6 +138,9 @@ func (msg *UpdatedMsg) Apply(store *TabStore) error {
 	}
 	if d.FavIconUrl != nil {
 		tab.FavIconUrl = *d.FavIconUrl
+	}
+	if d.FavIconFile != nil {
+		tab.FavIconFile = *d.FavIconFile
 	}
 	if d.Hidden != nil {
 		tab.Hidden = *d.Hidden
