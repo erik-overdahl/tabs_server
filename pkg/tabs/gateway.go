@@ -20,28 +20,31 @@ import (
 
 var (
 	GatewaySockAddr = "/tmp/browser_gateway.sock"
-	GatewayLogfile = "/home/francis/Projects/firefox-extension/gateway.log"
+	GatewayLogfile  = "/home/francis/Projects/firefox-extension/gateway.log"
+	FirefoxProfile  = "/home/francis/.mozilla/firefox/w7ib4vbq.dev-edition-default"
 )
 
 type Gateway struct {
 	tabs        *TabStore
 	connections []net.Conn
 	// receive Response and Events from browser
-	inStream    chan *Message
+	inStream chan *Message
 	// send Requests from connections to browser
-	outStream   chan *Message
+	outStream chan *Message
 	// since we will be forwarding these onward, send these as generic
 	// messages rather than Responses to avoid needless unwrap/rewrap
-	requests	map[uuid.UUID]chan *Message
+	requests map[uuid.UUID]chan *Message
+	favicons *FaviconProcessor
 }
 
 func MakeGateway() *Gateway {
 	return &Gateway{
 		tabs:        MakeTabStore(),
 		connections: []net.Conn{},
-		requests:	 make(map[uuid.UUID]chan *Message),
+		requests:    make(map[uuid.UUID]chan *Message),
 		inStream:    make(chan *Message),
 		outStream:   make(chan *Message),
+		favicons:    makeFaviconProcessor(),
 	}
 }
 
@@ -57,7 +60,7 @@ func (g *Gateway) Start() {
 	log.Printf("PID is %d", os.Getpid())
 
 	// send messages from all connections to stdout
-	go func(){
+	go func() {
 		for msg := range g.outStream {
 			if err := SendMsg(os.Stdout, msg); err != nil {
 				log.Fatalf("Failed to write to stdout (???): %v", err)
@@ -105,6 +108,11 @@ func (g *Gateway) Start() {
 	}
 	log.Printf("Received %d tabs from browser", len(tabs))
 	for _, tab := range tabs {
+		if filename, err := g.favicons.Process(tab); err != nil {
+			log.Printf("failed to get favicon file for %s: %s", tab.Url, err)
+		} else {
+			tab.FavIconFile = filename
+		}
 		g.tabs.Open[tab.ID] = tab
 	}
 	g.listenForConnections()
@@ -123,6 +131,26 @@ func (g *Gateway) handleMessage(msg *Message) error {
 			responseChan <- msg
 		}
 	case msg.Event != nil:
+		switch event := msg.Event.(type) {
+		case *UpdatedMsg:
+			if event.Delta.FavIconUrl != nil {
+				if tab, exists := g.tabs.Open[event.TabId]; exists {
+					if filename, err := g.favicons.Process(tab); err != nil {
+						return fmt.Errorf("failed to get favicon file for %s: %s", tab.Url, err)
+					} else {
+						event.Delta.FavIconFile = &filename
+					}
+				}
+			}
+		case *CreatedMsg:
+			if tab, exists := g.tabs.Open[event.ID]; exists {
+				if filename, err := g.favicons.Process(tab); err != nil {
+					log.Printf("failed to get favicon file for %s: %s", tab.Url, err)
+				} else {
+					event.FavIconFile = filename
+				}
+			}
+		}
 		msg.Event.Apply(g.tabs)
 		for _, conn := range g.connections {
 			if err := SendMsg(conn, msg); err != nil {
@@ -153,7 +181,6 @@ func (g *Gateway) listenForConnections() {
 		go g.listenConn(conn)
 	}
 }
-
 
 func (g *Gateway) listenConn(conn net.Conn) {
 	defer g.closeConn(conn)
@@ -211,4 +238,3 @@ func (g *Gateway) closeConn(conn net.Conn) {
 	}
 	conn.Close()
 }
-
