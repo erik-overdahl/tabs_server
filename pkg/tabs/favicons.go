@@ -1,14 +1,16 @@
 package tabs
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"hash/fnv"
 	"log"
 	"os"
 	"os/exec"
-	"regexp"
+	"path/filepath"
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -34,77 +36,107 @@ func makeFaviconProcessor() *FaviconProcessor {
 // writes the data to a file if it does not already exist
 // returns the filename
 func (this *FaviconProcessor) Process(tab *Tab) (string, error) {
-	if filename, err := this.getFromSqlite(tab.Url); errors.Is(err, sql.ErrNoRows) {
-	// if lookup fails, we decode and potentially convert Favicon string from browser
-		return this.decode(tab.FavIconUrl)
-	} else if err != nil {
-		return "", err
-	} else {
-		return filename, nil
+	hash := favIconUrlHash(tab.FavIconUrl)
+	files, _ := filepath.Glob(fmt.Sprintf("%s/%s\\.*", FaviconCacheDir, hash))
+	if files != nil && len(files) == 1 {
+			return files[0], nil
+		}
+	var (
+		data []byte
+	    ext string
+		err error
+	)
+	if data, ext, err = this.decode(tab.FavIconUrl); err != nil {
+		log.Printf("unable to decode favicon, falling back to sqlite lookup: %s", tab.Url)
+		if data, ext, err = this.getFromSqlite(tab.Url); errors.Is(err, sql.ErrNoRows) {
+			log.Printf("no favicon found for %s", tab.Url)
+			return "", err
+		} else if err != nil {
+			return "", err
+		}
 	}
-}
-
-func (this *FaviconProcessor) getFromSqlite(url string) (string, error) {
-	row := this.db.QueryRow("select i.fixed_icon_url_hash, i.data from moz_icons i join moz_icons_to_pages ip join moz_pages_w_icons p where p.id = ip.page_id and ip.icon_id = i.id and p.page_url = ?", url)
-	var hash int
-	var data []byte
-	if err := row.Scan(&hash, &data); err != nil {
-		return "", err
-	}
-	ext := "svg"
-	if string(data[1:4]) == "PNG" {
+	if ext == "ico" {
+		if data, err = convertIcoToPng(data); err != nil {
+			return "", fmt.Errorf("failed to convert ico to png: %w", err)
+		}
 		ext = "png"
 	}
-	filename := fmt.Sprintf("%s/%d.%s", FaviconCacheDir, hash, ext)
-	if _, err := os.Stat(filename); err == nil {
-		return filename, nil
-	}
-	file, err := os.Create(filename)
-	if err != nil {
-		return "", err
-	}
-	if _, err := file.Write(data); err != nil {
-		return "", err
-	}
-	return filename, nil
-}
-
-func (this *FaviconProcessor) decode(favIconUrl string) (string, error) {
-	suffixMap := map[string]string{
-		"data:image/x-icon":  "*.ico",
-		"data:image/png":     "*.png",
-		"data:image/svg+xml": "*.svg",
-		"data:image/webp":    "*.webp",
-	}
-	iconType := strings.Split(favIconUrl, ";")[0]
-	suffix, exists := suffixMap[iconType]
-	if !exists {
-		return "", fmt.Errorf("FavIconUrl %s is not base64 decodable png or svg", favIconUrl)
-	}
-	b64Str := strings.Split(favIconUrl, ",")[1]
-	data, err := base64.StdEncoding.DecodeString(b64Str)
-	if err != nil {
-		return "", fmt.Errorf("Failed to decode favicon: %w", err)
-	}
-	faviconFile, err := os.CreateTemp(FaviconCacheDir, suffix)
+	filename := fmt.Sprintf("%s/%s.%s", FaviconCacheDir, hash, ext)
+	faviconFile, err := os.Create(filename)
 	if err != nil {
 		return "", fmt.Errorf("Failed to create favicon file: %w", err)
 	}
 	if _, err := faviconFile.Write(data); err != nil {
 		return "", fmt.Errorf("Failed to write favicon: %w", err)
 	}
-	if suffix == "*.ico" {
-		pngFilename := strings.ReplaceAll(faviconFile.Name(), ".ico", ".png")
-		cmd := exec.Command("convert", "-verbose", faviconFile.Name(), pngFilename)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return "", fmt.Errorf("Failed to read conversion output: %w", err)
-		} else {
-			m := regexp.MustCompile(faviconFile.Name()[:len(faviconFile.Name())-len(suffix)+1] + `(?:-\d+)?\.png`)
-			lines := strings.Split(string(out), "\n")
-			largest := lines[len(lines)-2]
-			pngFilename = m.FindString(largest)
-		}
-		return pngFilename, nil
+	return filename, nil
+}
+
+func (this *FaviconProcessor) getFromSqlite(url string) (data []byte, ext string, err error) {
+	row := this.db.QueryRow("select i.data from moz_icons i join moz_icons_to_pages ip join moz_pages_w_icons p where p.id = ip.page_id and ip.icon_id = i.id and p.page_url = ?", url)
+	if err := row.Scan(&data); err != nil {
+		return nil, "", err
 	}
-	return faviconFile.Name(), nil
+	ext = "svg"
+	if string(data[1:4]) == "PNG" {
+		ext = "png"
+	}
+	return
+}
+
+var (
+	extMap = map[string]string{
+		"data:image/x-icon":  "ico",
+		"data:image/png":     "png",
+		"data:image/svg+xml": "svg",
+		"data:image/webp":    "webp",
+	}
+	pngHeader = []byte{0x89, 0x50, 0x4e, 0x47}
+)
+
+func (this *FaviconProcessor) decode(favIconUrl string) (data []byte, ext string, err error) {
+	iconType := strings.Split(favIconUrl, ";")[0]
+	ext, exists := extMap[iconType]
+	if !exists {
+		return nil, "", fmt.Errorf("FavIconUrl %s is not base64 decodable png or svg", favIconUrl)
+	}
+	b64Str := strings.Split(favIconUrl, ",")[1]
+	data, err = base64.StdEncoding.DecodeString(b64Str)
+	if err != nil {
+		return nil, "", fmt.Errorf("Failed to decode favicon: %w", err)
+	}
+	return
+}
+
+func convertIcoToPng(favIconData []byte) ([]byte, error) {
+	var out bytes.Buffer
+	cmd := exec.Command("convert", "ico:-", "png:-")
+	cmd.Stdin = bytes.NewBuffer(favIconData)
+	cmd.Stdout = &out
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("Failed to run `convert`: %w", err)
+	}
+	pngData := out.Bytes()
+	// the resulting output may have several images
+	// grab the last one (typically the highest resolution)
+	pngPos := 0
+	for i := range pngData[:len(pngData) - 4] {
+		isHeader := true
+		for j := 0; j < 4; j++ {
+			if pngData[i+j] != pngHeader[j] {
+				isHeader = false
+				break
+			}
+		}
+		if isHeader {
+			pngPos = i
+		}
+	}
+	return pngData[pngPos:], nil
+}
+
+func favIconUrlHash(favIconUrl string) string {
+	h := fnv.New64a()
+	h.Write([]byte(favIconUrl))
+	return fmt.Sprintf("%d", h.Sum64())
 }

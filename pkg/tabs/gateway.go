@@ -111,6 +111,7 @@ func (g *Gateway) Start() {
 		if filename, err := g.favicons.Process(tab); err != nil {
 			log.Printf("failed to get favicon file for %s: %s", tab.Url, err)
 		} else {
+			log.Printf("Favicon file is %s for %s", filename, tab.Url)
 			tab.FavIconFile = filename
 		}
 		g.tabs.Open[tab.ID] = tab
