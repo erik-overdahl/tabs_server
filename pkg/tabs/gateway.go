@@ -110,16 +110,6 @@ func (g *Gateway) Start() {
 	g.listenForConnections()
 }
 
-/*
-   Handle messages sent by the browser
-
-   If the message id is 0, the message is a push from the browser. The
-   change is applied to the gateway's tab store and then broadcast to
-   all clients
-
-   Otherwise, it is a response to a request we sent, and we route it
-   appropriately
-  */
 func (g *Gateway) handleMessage(msg *Message) error {
 	switch {
 	case msg.Request != nil:
@@ -135,8 +125,6 @@ func (g *Gateway) handleMessage(msg *Message) error {
 	case msg.Event != nil:
 		msg.Event.Apply(g.tabs)
 		for _, conn := range g.connections {
-			// b, _ := json.Marshal(msg)
-			// log.Println("FORWARDING: ", string(b))
 			if err := SendMsg(conn, msg); err != nil {
 				log.Printf("ERROR: Failed to send msg to %v: %v", conn, err)
 			}
@@ -169,11 +157,18 @@ func (g *Gateway) listenForConnections() {
 
 func (g *Gateway) listenConn(conn net.Conn) {
 	defer g.closeConn(conn)
+	// every connection gets a channel
+	msgChan := make(chan *Message)
+	go func(c net.Conn, msgs chan *Message) {
+		for msg := range msgs {
+			SendMsg(c, msg)
+		}
+	}(conn, msgChan)
 
 	// I think this works???
-	cIn := bufio.NewReader(conn)
+	// cIn := bufio.NewReader(conn)
 	for {
-		msg, err := ReadMsg(cIn)
+		msg, err := ReadMsg(conn)
 		if err == io.EOF {
 			log.Printf("Received EOF from client")
 			break
@@ -182,8 +177,6 @@ func (g *Gateway) listenConn(conn net.Conn) {
 			continue
 		}
 
-		// The gateway can respond immediately to Read requests
-		// and forwards Write requests to the browser
 		request := msg.Request
 		if request == nil {
 			log.Printf("ERROR: Received non-request from client: %v", msg)
@@ -202,13 +195,8 @@ func (g *Gateway) listenConn(conn net.Conn) {
 			}
 			SendMsg(conn, &Message{Response: response})
 		default:
-			responseChan := make(chan *Message)
-			g.requests[request.ID] = responseChan
-			go func(resp chan *Message) {
-				g.outStream <- msg
-				response := <-resp
-				SendMsg(conn, response)
-			}(responseChan)
+			g.requests[request.ID] = msgChan
+			g.outStream <- msg
 		}
 	}
 }
@@ -223,3 +211,4 @@ func (g *Gateway) closeConn(conn net.Conn) {
 	}
 	conn.Close()
 }
+
