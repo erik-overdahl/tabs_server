@@ -91,7 +91,6 @@ var (
 		"data:image/svg+xml": "svg",
 		"data:image/webp":    "webp",
 	}
-	pngHeader = []byte{0x89, 0x50, 0x4e, 0x47}
 )
 
 func (this *FaviconProcessor) decode(favIconUrl string) (data []byte, ext string, err error) {
@@ -119,20 +118,13 @@ func convertIcoToPng(favIconData []byte) ([]byte, error) {
 	pngData := out.Bytes()
 	// the resulting output may have several images
 	// grab the last one (typically the highest resolution)
-	pngPos := 0
-	for i := range pngData[:len(pngData) - 4] {
-		isHeader := true
-		for j := 0; j < 4; j++ {
-			if pngData[i+j] != pngHeader[j] {
-				isHeader = false
-				break
-			}
-		}
-		if isHeader {
-			pngPos = i
+	// - look from back of buffer for PNG header (8950 4e47)
+	for i := len(pngData) - 4; i > 0; i-- {
+		if pngData[i] == 0x89 && pngData[i+1] == 0x50 && pngData[i+2] == 0x4e && pngData[i+3] == 0x47 {
+			return pngData[i:], nil
 		}
 	}
-	return pngData[pngPos:], nil
+	return nil, fmt.Errorf("Did not find PNG header in `convert` output")
 }
 
 func favIconUrlHash(favIconUrl string) string {
