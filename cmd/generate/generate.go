@@ -43,9 +43,10 @@ func main() {
 		log.Fatal(err)
 	}
 	parser := generate.MakeTokenParser()
-	// result, err := parser.Parse(tokens)
-	if _, err := parser.Parse(tokens); err != nil {
+	result, err := parser.Parse(tokens)
+	if err != nil {
 		log.Fatal(err)
 	}
+	result = generate.Clean(result)
 	log.Println("SUCCESS")
 }

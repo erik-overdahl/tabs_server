@@ -9,27 +9,41 @@ func MakeStack[T any]() *Stack[T] {
 }
 
 func (s *Stack[T]) Push(val T) {
-    s.items = append(s.items, val)
+	s.items = append(s.items, val)
 }
 
 func (s *Stack[T]) Pop() (T, bool) {
-    if len(s.items) == 0 {
-        var zero T
-        return zero, false
-    }
-    top := s.items[len(s.items)-1]
-    s.items = s.items[:len(s.items)-1]
-    return top, true
+	if len(s.items) == 0 {
+		var zero T
+		return zero, false
+	}
+	top := s.items[len(s.items)-1]
+	s.items = s.items[:len(s.items)-1]
+	return top, true
 }
 
 func (s Stack[T]) Peek() (T, bool) {
-    if len(s.items) == 0 {
-        var zero T
-        return zero, false
-    }
-    return s.items[len(s.items)-1], true
+	if len(s.items) == 0 {
+		var zero T
+		return zero, false
+	}
+	return s.items[len(s.items)-1], true
 }
 
 func (s Stack[T]) Len() int {
 	return len(s.items)
+}
+
+func remove[T any](i int, list []T) []T {
+	if !(-1 < i || i < len(list)) {
+		return list
+	}
+	switch i {
+	case 0:
+		return list[1:]
+	case len(list) - 1:
+		return list[:i]
+	default:
+		return append(list[:i], list[i+1:]...)
+	}
 }
