@@ -7,30 +7,30 @@ package generate
 
 import "strings"
 
-func Clean(node Node) Node {
+func Clean(node JSON) JSON {
 	switch node := node.(type) {
-	case *listNode:
+	case *ListNode:
 		return cleanList(node)
-	case *objNode:
+	case *ObjNode:
 		return cleanObject(node)
-	case *propNode:
+	case *KeyValueNode:
 		return cleanProperty(node)
 	default:
 		return cleanValue(node)
 	}
 }
 
-func cleanList(list *listNode) *listNode {
+func cleanList(list *ListNode) *ListNode {
 	i := 0
 	for i < len(list.Items) {
 		item := list.Items[i]
 		switch item := item.(type) {
-		case *objNode:
+		case *ObjNode:
 			if cleanObject(item) == nil {
 				list.Items = remove(i, list.Items)
 				continue
 			}
-		case *listNode:
+		case *ListNode:
 			if cleanList(item) == nil {
 				list.Items = remove(i, list.Items)
 				continue
@@ -51,11 +51,11 @@ func cleanList(list *listNode) *listNode {
 	return list
 }
 
-func cleanObject(obj *objNode) *objNode {
+func cleanObject(obj *ObjNode) *ObjNode {
 	i := 0
-	for i < len(obj.Properties) {
-		prop := obj.Properties[i]
-		switch prop.Name {
+	for i < len(obj.Items) {
+		prop := obj.Items[i]
+		switch prop.Key {
 		case "unsupported", "deprecated":
 			return nil
 		case "id":
@@ -66,24 +66,24 @@ func cleanObject(obj *objNode) *objNode {
 		case "additionalProperties":
 		}
 		if cleanProperty(prop) == nil {
-			obj.Properties = remove(i, obj.Properties)
+			obj.Items = remove(i, obj.Items)
 			continue
 		}
 		i++
 	}
-	if len(obj.Properties) == 0 {
+	if len(obj.Items) == 0 {
 		return nil
 	}
 	return obj
 }
 
-func cleanProperty(prop *propNode) *propNode {
+func cleanProperty(prop *KeyValueNode) *KeyValueNode {
 	switch value := prop.Value.(type) {
-	case *listNode:
+	case *ListNode:
 		if cleanList(value) == nil {
 			return nil
 		}
-	case *objNode:
+	case *ObjNode:
 		if cleanObject(value) == nil {
 			return nil
 		}
