@@ -288,7 +288,6 @@ func (this *JsonTokenizer) readObject(pos int) (int, error) {
 // in `this.data`; add the resulting this.tokens to `this.tokens` and returns index of
 // first byte in `this.data` after end of value token
 func (this *JsonTokenizer) readKeyValuePair(pos int) (int, error) {
-	fmt.Printf("KVPAIR: %s\n", this.data[pos:])
 	end := pos
 	if n, err := this.readWhitespaceOrComment(end); err != nil {
 		return 0, err
@@ -302,7 +301,6 @@ func (this *JsonTokenizer) readKeyValuePair(pos int) (int, error) {
 	} else {
 		end += n
 	}
-	fmt.Printf("Key is %v\n", this.tokens[len(this.tokens)-1])
 
 	if n,err := this.readWhitespaceOrComment(end); err != nil {
 		return 0,err
@@ -315,7 +313,6 @@ func (this *JsonTokenizer) readKeyValuePair(pos int) (int, error) {
 	}
 	this.tokens = append(this.tokens, jsonColon{pos: end})
 	end++
-	fmt.Println("reading value")
 
 	if n, err := this.readJson(end); err != nil {
 		return 0, err
