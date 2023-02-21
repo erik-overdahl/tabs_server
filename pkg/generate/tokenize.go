@@ -11,7 +11,6 @@ type token interface {
 
 type jsonObjOpen struct {
 	pos   int
-	Depth int
 }
 
 func (token jsonObjOpen) Pos() int {
@@ -20,7 +19,6 @@ func (token jsonObjOpen) Pos() int {
 
 type jsonObjClose struct {
 	pos   int
-	Depth int
 }
 
 func (token jsonObjClose) Pos() int {
@@ -29,7 +27,6 @@ func (token jsonObjClose) Pos() int {
 
 type jsonArrOpen struct {
 	pos   int
-	Depth int
 }
 
 func (token jsonArrOpen) Pos() int {
@@ -38,7 +35,6 @@ func (token jsonArrOpen) Pos() int {
 
 type jsonArrClose struct {
 	pos   int
-	Depth int
 }
 
 func (token jsonArrClose) Pos() int {
@@ -126,149 +122,312 @@ func (token jsonNumber) Value() any {
 	return token.value
 }
 
-func TokenizeJson(data []byte) (tokens []token, err error) {
-	// fmt.Printf("Tokenizing %d bytes\n", len(data))
-	defer func() {
-		if r := recover(); r != nil {
-			tokens = nil
-			err = fmt.Errorf("%s", r)
+type errTokenize struct {
+	pos int
+	info string
+}
+
+func (e errTokenize) Error() string {
+	return fmt.Sprintf("error reading token: %d: %s", e.pos, e.info)
+}
+
+type JsonTokenizer struct {
+	data   []byte
+	tokens []token
+}
+
+func TokenizeJson(data []byte) ([]token, error) {
+	tokenizer := JsonTokenizer{
+		data: data,
+		tokens: []token{},
+	}
+	pos := 0
+	for pos < len(data) {
+		if n, err := tokenizer.readJson(pos); err != nil {
+			return nil, err
+		} else {
+			pos += n
 		}
-	}()
-	stack := Stack[byte]{}
-	i := 0
-	for i < len(data) {
-		switch data[i] {
-		case '/': // deal with comments
-			// fmt.Printf("Reading comment: %d: %q...\n", i, data[i:i+5])
-			start := i
-			i++
-			switch data[i] {
-			case '*': // skip until */
-				for i < len(data)-1 && !(data[i-1] == '*' && data[i] == '/') {
-					i++
-				}
-			case '/': // skip until newline
-				for i < len(data) && data[i] != '\n' {
-					i++
-				}
+	}
+	return tokenizer.tokens, nil
+}
+
+func (this *JsonTokenizer) readJson(pos int) (int, error) {
+	end := pos
+	if n, err := this.readWhitespaceOrComment(pos); err != nil {
+		return 0, err
+	} else if len(this.data) <= n {
+		return n, nil
+	} else {
+		end += n
+	}
+
+	var f func(int) (int, error)
+	switch this.data[end] {
+	case '{':
+		f = this.readObject
+	case '[':
+		f = this.readArray
+	case '"':
+		f = this.readString
+	case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+		f = this.readNumber
+	case 't':
+		f = this.readTrue
+	case 'f':
+		f = this.readFalse
+	case 'n':
+		f = this.readNull
+	default:
+		return 0, errTokenize{pos: end, info: fmt.Sprintf("unexpected char %q", this.data[end])}
+	}
+	if n, err := f(end); err != nil {
+		return 0, err
+	} else {
+		end += n
+	}
+
+	if n, err := this.readWhitespaceOrComment(end); err != nil {
+		return 0, err
+	} else {
+		return end + n - pos, nil
+	}
+}
+
+func (this *JsonTokenizer) readWhitespaceOrComment(pos int) (int, error) {
+	end := pos
+	for end < len(this.data) {
+		switch this.data[end] {
+		case ' ', '\n', '\t', '\r':
+			end++
+		case '/':
+			if n, err := this.readComment(end); err != nil {
+				return 0, err
+			} else {
+				end += n
 			}
-			// fmt.Printf("COMMENT: %d: %d: %s\n", start, i, data[start : i+1])
-			tokens = append(tokens, jsonComment{pos: i, Value: string(data[start : i+1])})
-
-		case '{':
-			stack.Push(data[i])
-			tokens = append(tokens, jsonObjOpen{pos: i, Depth: stack.Len()})
-			// fmt.Printf("%*s: %d\n", stack.Len(), "{", i)
-			i++
-
-		case '}':
-			if val, exists := stack.Peek(); !exists {
-				return nil, fmt.Errorf("unbalanced json: %q at pos %d with no corresponding '{'", data[i], i)
-			} else if val != '{' {
-				return nil, fmt.Errorf("Unexpected char %q at pos %d: should match %q", data[i], i, val)
-			}
-			// fmt.Printf("%*s: %d\n", stack.Len(), "}", i)
-			tokens = append(tokens, jsonObjClose{pos: i, Depth: stack.Len()})
-			stack.Pop()
-			i++
-
-		case '[':
-			stack.Push(data[i])
-			tokens = append(tokens, jsonArrOpen{pos: i, Depth: stack.Len()})
-			// fmt.Printf("%*s: %d\n", stack.Len(), "[", i)
-			i++
-
-		case ']':
-			if val, exists := stack.Peek(); !exists {
-				return nil, fmt.Errorf("unbalanced json: %q at pos %d with no corresponding '['", data[i], i)
-			} else if val != '[' {
-				return nil, fmt.Errorf("Unexpected char %q at pos %d: should match %q", data[i], i, val)
-			}
-			// fmt.Printf("%*s: %d\n", stack.Len(), "]", i)
-			stack.Pop()
-			tokens = append(tokens, jsonArrClose{pos: i, Depth: stack.Len()})
-			i++
-
-		case ':':
-			// fmt.Printf("COLON: %d: :\n", i)
-			tokens = append(tokens, jsonColon{pos: i})
-			i++
-
-		case ',':
-			// fmt.Printf("COMMA: %d: ,\n", i)
-			tokens = append(tokens, jsonComma{pos: i})
-			i++
-
-		case '"':
-			i++
-			start := i
-			for i < len(data) {
-				if data[i] == '"' && data[i-1] != '\\' {
-					break
-				}
-				i++
-			}
-			// fmt.Printf("STRING: %d: %d: %s\n", start, i, data[start : i])
-			tokens = append(tokens, jsonString{pos: i, value: string(data[start:i])})
-			i++
-
-		case '-', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-			start := i
-			i++
-			done := false
-			for i < len(data) && !done {
-				switch data[i] {
-				case ',', '}', ']', ' ', '\r', '\n', '\t':
-					done = true
-				case '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
-					i++
-				default:
-					return nil, fmt.Errorf("unexpected char while parsing number: %q at pos %d", data[i], i)
-				}
-			}
-			value, err := convertNum(string(data[start:i]))
-			if err != nil {
-				return nil, err
-			}
-			// fmt.Printf("NUMBER: %d: %d: %s\n", start, i, data[start : i])
-			tokens = append(tokens, jsonNumber{pos: i, value: value})
-
-		case 'f': // should we allow upper and lower case for booleans?
-			for j, c := range []byte("false") {
-				if data[i+j] != c {
-					return nil, fmt.Errorf("unexpected char while parsing: expected %q, got %q at pos %d", c, data[i+j], i+j)
-				}
-			}
-			tokens = append(tokens, jsonBool{pos: i, value: false})
-			i += len("false")
-
-		case 't':
-			for j, c := range []byte("true") {
-				if data[i+j] != c {
-					return nil, fmt.Errorf("unexpected char while parsing: expected %q, got %q at pos %d", c, data[i+j], i+j)
-				}
-			}
-			tokens = append(tokens, jsonBool{pos: i, value: true})
-			i += len("true")
-
-		case 'n':
-			for j, c := range []byte("null") {
-				if data[i+j] != c {
-					return nil, fmt.Errorf("unexpected char while parsing: expected %q, got %q at pos %d", c, data[i+j], i+j)
-				}
-			}
-			tokens = append(tokens, jsonNull{pos: i})
-			i += len("null")
-		case ' ', '\r', '\n', '\t': // skip whitespace
-			i++
 		default:
-			return nil, fmt.Errorf("unexpected char %q at pos %d", data[i], i)
+			return end - pos, nil
 		}
 	}
-	if stack.Len() > 0 {
-		return nil, fmt.Errorf("unbalanced json: %s were not closed", string(stack.items))
+	return end + 1 - pos, nil
+}
+
+func (this *JsonTokenizer) readComment(pos int) (int, error) {
+	end := pos + 1
+	switch this.data[end] {
+	case '/':
+	case '*':
+		return this.readMultilineComment(pos)
+	default:
+		return 0, errTokenize{pos: pos + 1, info: fmt.Sprintf("unexpected char reading comment: expected '/' or '*', got %q", this.data[end])}
 	}
-	return tokens, nil
+	for end < len(this.data) {
+		if this.data[end] == '\n' {
+			this.tokens = append(this.tokens, jsonComment{pos: pos, Value: string(this.data[pos:end+1])})
+			break
+		}
+		end++
+	}
+	return end + 1 - pos, nil
+}
+
+func (this *JsonTokenizer) readMultilineComment(pos int) (int, error) {
+	end := pos + 1
+	complete := false
+	for end < len(this.data) && !complete {
+		if this.data[end-1] == '*' && this.data[end] == '/' {
+			complete = true
+		}
+		end++
+	}
+	if !complete {
+		return 0, errTokenize{pos: end, info: "unexpected end of data reading multiline comment"}
+	} else if end < len(this.data) - 1 && this.data[end] != '\n' {
+		return 0, errTokenize{pos: end, info: fmt.Sprintf("multiline comment must be followed by newline or EOF: found %q", this.data[end])}
+	}
+	this.tokens = append(this.tokens, jsonComment{pos: pos, Value: string(this.data[pos:end+1])})
+	return end + 1 - pos, nil
+}
+
+// read the object starting at index `i` in `this.data`
+// adds the resulting this.tokens to `this.tokens`
+// returns index of first byte in `this.data` after end of object
+func (this *JsonTokenizer) readObject(pos int) (int, error) {
+	this.tokens = append(this.tokens, jsonObjOpen{pos:pos})
+	end := pos + 1
+	for end < len(this.data) && this.data[end] != '}' {
+		if n, err := this.readKeyValuePair(end); err != nil {
+			return 0, err
+		} else {
+			end += n
+		}
+
+		if n, err := this.readWhitespaceOrComment(end); err != nil {
+			return 0, err
+		} else {
+			end += n
+		}
+		if this.data[end] == ',' {
+			this.tokens = append(this.tokens, jsonComma{pos: end})
+			end++
+		} else if this.data[end] == '}' {
+			break
+		} else {
+			return 0, errTokenize{pos: end, info: fmt.Sprintf("unexpected char reading object: %q", this.data[end])}
+		}
+	}
+	if end == len(this.data) {
+		return 0, errTokenize{pos: pos, info: "unexpected end of data"}
+	}
+	this.tokens = append(this.tokens, jsonObjClose{pos: end})
+	return end + 1 - pos, nil
+}
+
+// reads the this.tokens jsonString, jsonColon, and any starting at index `i`
+// in `this.data`; add the resulting this.tokens to `this.tokens` and returns index of
+// first byte in `this.data` after end of value token
+func (this *JsonTokenizer) readKeyValuePair(pos int) (int, error) {
+	fmt.Printf("KVPAIR: %s\n", this.data[pos:])
+	end := pos
+	if n, err := this.readWhitespaceOrComment(end); err != nil {
+		return 0, err
+	} else {
+		end += n
+	}
+	if this.data[end] != '"' {
+		return 0, errTokenize{pos: pos, info: fmt.Sprintf("unexpected char reading key-value pair: expected '\"', got %q", this.data[end])}
+	} else if n, err := this.readString(end); err != nil {
+		return 0, err
+	} else {
+		end += n
+	}
+	fmt.Printf("Key is %v\n", this.tokens[len(this.tokens)-1])
+
+	if n,err := this.readWhitespaceOrComment(end); err != nil {
+		return 0,err
+	} else {
+		end += n
+	}
+
+	if this.data[end] != ':' {
+		return 0, errTokenize{pos: end, info: fmt.Sprintf("unexpected char reading key-value pair: expected ':', got %q", this.data[pos])}
+	}
+	this.tokens = append(this.tokens, jsonColon{pos: end})
+	end++
+	fmt.Println("reading value")
+
+	if n, err := this.readJson(end); err != nil {
+		return 0, err
+	} else {
+		end += n
+	}
+
+	return end - pos, nil
+}
+
+// read the array starting at index `i` in `this.data`
+// adds the resulting this.tokens to `this.tokens`
+// returns index of first byte in `this.data` after end of object
+func (this *JsonTokenizer) readArray(pos int) (int, error) {
+	this.tokens = append(this.tokens, jsonArrOpen{pos: pos})
+	end := pos + 1
+	for end < len(this.data) && this.data[end] != ']' {
+		if n, err := this.readJson(end); err != nil {
+			return 0, err
+		} else {
+			end += n
+		}
+		if this.data[end] == ',' {
+			this.tokens = append(this.tokens, jsonComma{pos: end})
+			end++
+		} else if this.data[end] == ']' {
+			break
+		} else {
+			return 0, errTokenize{pos: end, info: fmt.Sprintf("unexpected char reading array: %q", this.data[end])}
+		}
+	}
+	if end == len(this.data) {
+		return 0, errTokenize{pos: pos, info: "unexpected end of data"}
+	}
+	this.tokens = append(this.tokens, jsonArrClose{pos: end})
+	return end + 1 - pos, nil
+}
+
+
+func (this *JsonTokenizer) readString(pos int) (int, error) {
+	end := pos + 1
+	for end < len(this.data) {
+		switch this.data[end] {
+		case '"':
+			if this.data[end - 1] != '\\' {
+				this.tokens = append(this.tokens, jsonString{pos: pos, value: string(this.data[pos+1:end])})
+				return end + 1 - pos, nil
+			}
+		default:
+			end++
+		}
+	}
+	return 0, errTokenize{pos: end, info: "unexpected end of data"}
+}
+
+func (this *JsonTokenizer) readNumber(pos int) (int, error) {
+	reading := true
+	end := pos
+	if this.data[end] == '-' {
+		end++
+	}
+	for end < len(this.data) && reading {
+		switch this.data[end] {
+		case ',', '}', ']', ' ', '\r', '\n', '\t':
+			reading = false
+		case '.', '0', '1', '2', '3', '4', '5', '6', '7', '8', '9':
+			end++
+		default:
+			return 0, errTokenize{pos: end, info: fmt.Sprintf("unexpected char while parsing number: %q", this.data[end])}
+		}
+	}
+	value, err := convertNum(string(this.data[pos:end]))
+	if err != nil {
+		return 0, err
+	}
+	this.tokens = append(this.tokens, jsonNumber{pos: pos, value: value})
+	return end - pos, nil
+}
+
+func (this *JsonTokenizer) readTrue(pos int) (int, error) {
+	if _, err := this.readValue(pos, "true"); err != nil {
+		return 0, err
+	}
+	this.tokens = append(this.tokens, jsonBool{pos: pos, value: true})
+	return 4, nil
+}
+
+func (this *JsonTokenizer) readFalse(pos int) (int, error) {
+	if _, err := this.readValue(pos, "false"); err != nil {
+		return 0, err
+	}
+	this.tokens = append(this.tokens, jsonBool{pos: pos, value: false})
+	return 5, nil
+}
+
+func (this *JsonTokenizer) readNull(pos int) (int, error) {
+	if _, err := this.readValue(pos, "null"); err != nil {
+		return 0, err
+	}
+	this.tokens = append(this.tokens, jsonNull{pos: pos})
+	return 4, nil
+}
+
+func (this *JsonTokenizer) readValue(pos int, value string) (int, error) {
+	for j, c := range []byte(value) {
+		if len(this.data) <= pos+j {
+			return 0, errTokenize{pos: pos+j, info: "unexpected end of data"}
+		} else if this.data[pos+j] != c {
+			return 0, errTokenize{pos: pos+j, info: fmt.Sprintf("unexpected char reading %s: expected %q, got %q", value, c, this.data[pos+j])}
+		}
+	}
+	return len(value), nil
 }
 
 func convertNum(tokenValue string) (any, error) {
