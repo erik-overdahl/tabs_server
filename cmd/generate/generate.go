@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"os"
@@ -47,6 +49,11 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	result = generate.Clean(result)
+	output, err := generate.Convert(result)
+	if err != nil {
+		log.Fatal(err)
+	}
 	log.Println("SUCCESS")
+	b, _ := json.MarshalIndent(output, "", " ")
+	fmt.Println(string(b))
 }
