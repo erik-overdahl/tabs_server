@@ -361,6 +361,7 @@ func (this *JsonTokenizer) readString(pos int) (int, error) {
 				this.tokens = append(this.tokens, jsonString{pos: pos, value: string(this.data[pos+1:end])})
 				return end + 1 - pos, nil
 			}
+			fallthrough
 		default:
 			end++
 		}
