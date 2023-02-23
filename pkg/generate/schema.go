@@ -570,6 +570,7 @@ func Convert(json JSON) ([]SchemaItem, error) {
 }
 
 func determineType(json *ObjNode) (SchemaItem, error) {
+	var item SchemaItem
 	base := &SchemaProperty{}
 	for _, kv := range json.Items {
 		switch kv.Key {
@@ -578,7 +579,7 @@ func determineType(json *ObjNode) (SchemaItem, error) {
 		case "choices":
 			return &SchemaChoicesProperty{SchemaProperty: base}, nil
 		case "$ref":
-			return &SchemaRefProperty{SchemaProperty: base}, nil
+			item = &SchemaRefProperty{SchemaProperty: base}
 		case "value":
 			return &SchemaValueProperty{SchemaProperty: base}, nil
 		case "properties":
@@ -612,7 +613,10 @@ func determineType(json *ObjNode) (SchemaItem, error) {
 			}
 		}
 	}
-	return base, nil
+	if item == nil {
+		return base, nil
+	}
+	return item, nil
 }
 
 
