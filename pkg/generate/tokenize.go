@@ -164,6 +164,8 @@ func (this *JsonTokenizer) readJson(pos int) (int, error) {
 
 	var f func(int) (int, error)
 	switch this.data[end] {
+	case ']', '}':
+		return end - pos, nil
 	case '{':
 		f = this.readObject
 	case '[':
