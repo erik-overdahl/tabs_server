@@ -2,6 +2,8 @@ package generate
 
 import (
 	"fmt"
+	_ "log"
+	"reflect"
 )
 
 type SchemaItem interface {
@@ -204,351 +206,6 @@ func (e ErrReadingKey) Error() string {
 	return fmt.Errorf("error reading key '%s': %w", e.Key, e.error).Error()
 }
 
-var actions map[string]func(SchemaItem, any) error
-
-func init() {
-	actions = map[string]func(SchemaItem, any) error{
-		"id": func(s SchemaItem, val any) error {
-			return set(&(s.Base().Id), val)
-		},
-		"name": func(s SchemaItem, val any) error {
-			return set(&(s.Base().Name), val)
-		},
-		"$ref": func(s SchemaItem, val any) error {
-			return set(&(s.Base().Ref), val)
-		},
-		"$extend": func(s SchemaItem, val any) error {
-			return set(&(s.Base().Extend), val)
-		},
-		"description": func(s SchemaItem, val any) error {
-			return set(&(s.Base().Description), val)
-		},
-		"min_manifest_version": func(s SchemaItem, val any) error {
-			return set(&(s.Base().MinManifestVersion), val)
-		},
-		"max_manifest_version": func(s SchemaItem, val any) error {
-			return set(&(s.Base().MaxManifestVersion), val)
-		},
-		"optional": func(s SchemaItem, val any) error {
-			base := s.Base()
-			switch v := val.(type) {
-			case bool:
-				base.Optional = v
-			case string:
-				base.Optional = v == "true" || v == "omit-if-key-missing"
-			default:
-				return ErrUnexpectedType{true, val}
-			}
-			return nil
-		},
-		"unsupported": func(s SchemaItem, val any) error {
-			base := s.Base()
-			switch v := val.(type) {
-			case bool:
-				base.Unsupported = v
-			case string:
-				base.Unsupported = val == "true"
-			default:
-				return ErrUnexpectedType{true, val}
-			}
-			return nil
-		},
-		"deprecated": func(s SchemaItem, val any) error {
-			s.Base().Deprecated = true // I don't care about the explanations
-			return nil
-		},
-		"permissions": func(s SchemaItem, val any) error {
-			v, err := castAndCall(val, func(lst *ListNode) ([]string, error) {
-				return parseList(lst, func(s string) (string, error) { return s, nil })
-			})
-			if err != nil {
-				return err
-			}
-			s.Base().Permissions = v
-			return nil
-		},
-		"allowedContexts": func(s SchemaItem, val any) error {
-			v, err := castAndCall(val, func(lst *ListNode) ([]string, error) {
-				return parseList(lst, func(s string) (string, error) { return s, nil })
-			})
-			if err != nil {
-				return err
-			}
-			s.Base().AllowedContexts = v
-			return nil
-		},
-		"choices": func(s SchemaItem, val any) error {
-			v, err := castAndCall(val, func(lst *ListNode) ([]SchemaItem, error) {
-				return parseList(lst, parseObject)
-			})
-			if err != nil {
-				return err
-			}
-			s.(*SchemaChoicesProperty).Choices = v
-			return nil
-		},
-		"default": func(s SchemaItem, val any) error {
-			switch item := s.(type) {
-			case *SchemaBoolProperty:
-				return set(&item.Default, val)
-			case *SchemaIntProperty:
-				return set(&item.Default, val)
-			case *SchemaFloatProperty:
-				return set(&item.Default, val)
-			case *SchemaStringProperty:
-				return set(&item.Default, val)
-			}
-			var v any
-			switch value := val.(type) {
-			case *ObjNode:
-				v = map[string]any{}
-			case *ListNode:
-				v = []any{}
-			default:
-				v = value
-			}
-			switch item := s.(type) {
-			case *SchemaChoicesProperty:
-				item.Default = v
-			case *SchemaArrayProperty:
-				item.Default = v
-			case *SchemaObjectProperty:
-				item.Default = v
-			}
-			return nil
-		},
-		"value": func(s SchemaItem, val any) error {
-			s.(*SchemaValueProperty).Value = val
-			return nil
-		},
-		"minimum": func(s SchemaItem, val any) error {
-			switch item := s.(type) {
-			case *SchemaFloatProperty:
-				return set(&(item.Minimum), val)
-			case *SchemaIntProperty:
-				return set(&(item.Minimum), val)
-			default:
-				return fmt.Errorf("unexpected type: %T", item)
-			}
-		},
-		"maximum": func(s SchemaItem, val any) error {
-			switch item := s.(type) {
-			case *SchemaFloatProperty:
-				return set(&(item.Maximum), val)
-			case *SchemaIntProperty:
-				return set(&(item.Maximum), val)
-			default:
-				return fmt.Errorf("unexpected type: %T", item)
-			}
-		},
-		"items": func(s SchemaItem, val any) error {
-			v, err := castAndCall(val, parseObject)
-			if err != nil {
-				return err
-			}
-			s.(*SchemaArrayProperty).Items = v
-			return nil
-		},
-		"enum": func(s SchemaItem, val any) error {
-			item, ok := s.(*SchemaStringProperty)
-			if !ok {
-				return nil // just skip it
-			}
-			v, err := castAndCall(val, func(lst *ListNode) ([]SchemaEnumValue, error) {
-				return parseList(lst, func(item any) (SchemaEnumValue, error) {
-					enum := SchemaEnumValue{}
-					switch item := item.(type) {
-					case string:
-						enum.Name = item
-					case *ObjNode:
-						for _, kv := range item.Items {
-							if kv.Key == "name" {
-								enum.Name = kv.Value.(string)
-							} else if kv.Key == "description" {
-								enum.Description = kv.Value.(string)
-							}
-						}
-					default:
-						return enum, fmt.Errorf("unexpected type: %T", item)
-					}
-					return enum, nil
-				})
-			})
-			if err != nil {
-				return err
-			}
-			item.Enum = v
-			return nil
-		},
-		"pattern": func(s SchemaItem, val any) error {
-			return set(&(s.(*SchemaStringProperty).Pattern), val)
-		},
-		"format": func(s SchemaItem, val any) error {
-			return set(&(s.(*SchemaStringProperty).Format), val)
-		},
-
-		// objects
-		"properties": func(s SchemaItem, val any) error {
-			v, err := castAndCall(val, func(lst *ObjNode) ([]SchemaItem, error) {
-				return mapf(lst.Items, parseProperty)
-			})
-			if err != nil {
-				return err
-			}
-			switch item := s.(type) {
-			case *SchemaObjectProperty:
-				item.Properties = v
-			case *SchemaNamespace:
-				item.Properties = v
-			default:
-				return fmt.Errorf("unexpected type: %T", item)
-			}
-			return nil
-		},
-		"additionalProperties": func(s SchemaItem, val any) error {
-			switch value := val.(type) {
-			case bool:
-				s.(*SchemaObjectProperty).AdditionalProperties = &SchemaAnyProperty{}
-			case *ObjNode:
-				v, err := parseObject(value)
-				if err != nil {
-					return err
-				}
-				s.(*SchemaObjectProperty).AdditionalProperties = v
-			}
-			return nil
-		},
-		"patternProperties": func(s SchemaItem, val any) error {
-			v, err := castAndCall(val, func(lst *ObjNode) ([]SchemaItem, error) {
-				return mapf(lst.Items, parseProperty)
-			})
-			if err != nil {
-				return err
-			}
-			if err != nil {
-				return err
-			}
-			s.(*SchemaObjectProperty).PatternProperties = v
-			return nil
-		},
-		"$import": func(s SchemaItem, val any) error {
-			switch item := s.(type) {
-			case *SchemaObjectProperty:
-				return set(&(item.Import), val)
-			case *SchemaNamespace:
-				return set(&(item.Import), val)
-			default:
-				return fmt.Errorf("unexpected type: %T", item)
-			}
-		},
-		"isInstanceOf": func(s SchemaItem, val any) error {
-			return set(&(s.(*SchemaObjectProperty).IsInstanceOf), val)
-		},
-		"functions": func(s SchemaItem, val any) error {
-			v, err := castAndCall(val, func(lst *ListNode) ([]*SchemaFunctionProperty, error) {
-				return parseList(lst, parseFunction)
-			})
-			if err != nil {
-				return err
-			}
-			switch item := s.(type) {
-			case *SchemaObjectProperty:
-				item.Functions = v
-			case *SchemaNamespace:
-				item.Functions = v
-			default:
-				return fmt.Errorf("unexpected type: %T", item)
-			}
-			return nil
-		},
-		"events": func(s SchemaItem, val any) error {
-			v, err := castAndCall(val, func(lst *ListNode) ([]*SchemaFunctionProperty, error) {
-				return parseList(lst, parseFunction)
-			})
-			if err != nil {
-				return err
-			}
-			switch item := s.(type) {
-			case *SchemaObjectProperty:
-				item.Events = v
-			case *SchemaNamespace:
-				item.Events = v
-			default:
-				return fmt.Errorf("unexpected type: %T", item)
-			}
-			return nil
-		},
-
-		// functions
-		"async": func(s SchemaItem, val any) error {
-			s.(*SchemaFunctionProperty).Async = true
-			return nil
-		},
-		"requireUserInput": func(s SchemaItem, val any) error {
-			return set(&(s.(*SchemaFunctionProperty).RequireUserInput), val)
-		},
-		"parameters": func(s SchemaItem, val any) error {
-			v, err := castAndCall(val, func(lst *ListNode) ([]SchemaItem, error) {
-				return parseList(lst, parseObject)
-			})
-			if err != nil {
-				return err
-			}
-			s.(*SchemaFunctionProperty).Parameters = v
-			return nil
-		},
-		"extraParameters": func(s SchemaItem, val any) error {
-			v, err := castAndCall(val, func(lst *ListNode) ([]SchemaItem, error) {
-				return parseList(lst, parseObject)
-			})
-			if err != nil {
-				return err
-			}
-			s.(*SchemaFunctionProperty).ExtraParameters = v
-			return nil
-		},
-		"returns": func(s SchemaItem, val any) error {
-			v, err := castAndCall(val, parseObject)
-			if err != nil {
-				return err
-			}
-			s.(*SchemaFunctionProperty).Returns = v
-			return nil
-		},
-		"filters": func(s SchemaItem, val any) error {
-			v, err := castAndCall(val, func(lst *ListNode) ([]SchemaItem, error) {
-				return parseList(lst, parseObject)
-			})
-			if err != nil {
-				return err
-			}
-			s.(*SchemaFunctionProperty).Filters = v
-			return nil
-		},
-		"allowAmbiguousOptionalArguments": func(s SchemaItem, val any) error {
-			return set(&(s.(*SchemaFunctionProperty).AllowAmbiguousOptionalArguments), val)
-		},
-		"allowCrossOriginArguments": func(s SchemaItem, val any) error {
-			return set(&(s.(*SchemaFunctionProperty).AllowCrossOriginArguments), val)
-		},
-
-		// namespaces
-		"namespace": func(s SchemaItem, val any) error {
-			return set(&(s.(*SchemaNamespace).Name), val)
-		},
-		"types": func(s SchemaItem, val any) error {
-			v, err := castAndCall(val, func(lst *ListNode) ([]SchemaItem, error) {
-				return parseList(lst, parseObject)
-			})
-			if err != nil {
-				return err
-			}
-			s.(*SchemaNamespace).Types = v
-			return nil
-		},
-	}
-}
-
 func Convert(json JSON) ([]SchemaItem, error) {
 	switch j := json.(type) {
 	case *ListNode:
@@ -619,6 +276,7 @@ func determineType(json *ObjNode) (SchemaItem, error) {
 	return item, nil
 }
 
+var zero reflect.Value
 
 func parseObject(json *ObjNode) (SchemaItem, error) {
 	item, err := determineType(json)
@@ -626,18 +284,73 @@ func parseObject(json *ObjNode) (SchemaItem, error) {
 		return nil, err
 	}
 	for _, kv := range json.Items {
-		// fmt.Printf("%s %T\n", kv.Key, kv.Value)
-		f, exists := actions[kv.Key]
-		if !exists {
-			// if kv.Key != "type" {
-			// 	fmt.Printf("nothing to do for key %s\n", kv.Key)
-			// }
-			continue
-		} else if err := f(item, kv.Value); err != nil {
-			return nil, ErrReadingKey{kv.Key, err}
+		if err := setField(item, kv); err != nil {
+			return nil, fmt.Errorf("key '%s': %w", kv.Key, err)
 		}
 	}
 	return item, nil
+}
+
+func setField(item SchemaItem, kv *KeyValueNode) error {
+	itemValue := reflect.ValueOf(item).Elem()
+	fieldName := exportable(snakeToCamel(kv.Key))
+	if kv.Key == "namespace" {
+		fieldName = "Name"
+	} else if kv.Key == "type" {
+		fieldName = "Type_"
+	}
+	field := itemValue.FieldByName(fieldName)
+	if field == zero {
+		return nil
+	}
+	// specific actions
+	var v any
+	var err error
+	switch kv.Key {
+	case "optional", "unsupported":
+		switch val := kv.Value.(type) {
+		case bool:
+			v = val
+		case string:
+			v = val == "true" || val == "omit-if-key-missing"
+		}
+	case "deprecated", "async":
+		v = true
+	case "additionalProperties":
+		switch value := kv.Value.(type) {
+		case bool:
+			v = &SchemaAnyProperty{}
+		case *ObjNode:
+			v, err = parseObject(value)
+		}
+	case "properties", "patternProperties":
+		v, err = castAndCall(kv.Value, func(lst *ObjNode) ([]SchemaItem, error) {
+			return mapf(lst.Items, parseProperty)
+		})
+	default:
+		switch field.Interface().(type) {
+		case string, bool, int, float64:
+			v = kv.Value
+		case nil:
+			_field, _ := itemValue.Type().FieldByName(fieldName)
+			switch _field.Type.Name() {
+			case "SchemaItem":
+				v, err = castAndCall(kv.Value, parseObject)
+			default:
+				v = kv.Value
+			}
+		case []string:
+			v, err = castAndCall(kv.Value, wrap(identity[string]))
+		case []SchemaItem:
+			v, err = castAndCall(kv.Value, wrap(parseObject))
+		case []*SchemaFunctionProperty:
+			v, err = castAndCall(kv.Value, wrap(parseFunction))
+		case []SchemaEnumValue:
+			v, err = castAndCall(kv.Value, parseEnum)
+		}
+	}
+	field.Set(reflect.ValueOf(v))
+	return err
 }
 
 func parseProperty(json *KeyValueNode) (SchemaItem, error) {
@@ -659,13 +372,56 @@ func parseFunction(json *ObjNode) (*SchemaFunctionProperty, error) {
 	}
 }
 
-func set[T any](field *T, val any) error {
-	coerced, ok := val.(T)
-	if !ok {
-		return ErrUnexpectedType{coerced, val}
+func parseEnum(lst *ListNode) ([]SchemaEnumValue, error) {
+	return parseList(lst, func(item any) (SchemaEnumValue, error) {
+		enum := SchemaEnumValue{}
+		switch item := item.(type) {
+		case string:
+			enum.Name = item
+		case *ObjNode:
+			for _, kv := range item.Items {
+				if kv.Key == "name" {
+					enum.Name = kv.Value.(string)
+				} else if kv.Key == "description" {
+					enum.Description = kv.Value.(string)
+				}
+			}
+		default:
+			return enum, fmt.Errorf("unexpected type: %T", item)
+		}
+		return enum, nil
+	})
+}
+
+func snakeToCamel(s string) string {
+	res := []byte{}
+	upcase := false
+	for i := range s {
+		c := s[i]
+		if c == '_' {
+			upcase = true
+			continue
+		} else if upcase && 96 < c {
+			c -= 32
+			upcase = false
+		}
+		res = append(res, c)
 	}
-	*field = coerced
-	return nil
+	return string(res)
+}
+
+func exportable(s string) string {
+	if s[0] == '$' {
+		s = s[1:]
+	}
+	if 96 < s[0] {
+		return string(s[0]-32) + s[1:]
+	}
+	return s
+}
+
+func wrap[T any, Y any](f func(T) (Y, error)) func(*ListNode) ([]Y, error) {
+	return func(lst *ListNode) ([]Y, error) { return parseList(lst, f) }
 }
 
 func parseList[ItemType any, To any](lst *ListNode, f func(ItemType) (To, error)) ([]To, error) {
@@ -674,7 +430,7 @@ func parseList[ItemType any, To any](lst *ListNode, f func(ItemType) (To, error)
 	})
 }
 
-func mapf[T any, Y any](lst []T, f func (T) (Y, error)) ([]Y, error) {
+func mapf[T any, Y any](lst []T, f func(T) (Y, error)) ([]Y, error) {
 	result := make([]Y, len(lst))
 	for i := range lst {
 		item, err := f(lst[i])
