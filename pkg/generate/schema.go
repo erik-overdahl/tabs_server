@@ -13,19 +13,20 @@ type SchemaItem interface {
 
 // the base type
 type SchemaProperty struct {
-	Id                 string
-	Name               string
-	Ref                string
-	Extend             string
-	Description        string
-	Optional           bool
-	Unsupported        bool
-	Deprecated         bool
-	Permissions        []string
-	AllowedContexts    []string
-	OnError            string
-	MinManifestVersion int
-	MaxManifestVersion int
+	Type_              string   `json:"type"`
+	Id                 string   `json:"id,omitempty"`
+	Name               string   `json:"name,omitempty"`
+	Ref                string   `json:"ref,omitempty"`
+	Extend             string   `json:"extend,omitempty"`
+	Description        string   `json:"description,omitempty"`
+	Optional           bool     `json:"optional,omitempty"`
+	Unsupported        bool     `json:"unsupported,omitempty"`
+	Deprecated         bool     `json:"deprecated,omitempty"`
+	Permissions        []string `json:"permissions,omitempty"`
+	AllowedContexts    []string `json:"allowedContexts,omitempty"`
+	OnError            string   `json:"onError,omitempty"`
+	MinManifestVersion int      `json:"minManifestVersion,omitempty"`
+	MaxManifestVersion int      `json:"maxManifestVersion,omitempty"`
 }
 
 func (_ SchemaProperty) Type() string {
@@ -39,8 +40,8 @@ func (this *SchemaProperty) Base() *SchemaProperty {
 // if there is a "choices" property
 type SchemaChoicesProperty struct {
 	*SchemaProperty
-	Choices []SchemaItem
-	Default any
+	Choices []SchemaItem `json:"choices,omitempty"`
+	Default any          `json:"default,omitempty"`
 }
 
 func (_ SchemaChoicesProperty) Type() string {
@@ -73,7 +74,7 @@ func (_ SchemaNullProperty) Type() string {
 
 type SchemaValueProperty struct {
 	*SchemaProperty
-	Value any
+	Value any `json:"value,omitempty"`
 }
 
 func (_ SchemaValueProperty) Type() string {
@@ -82,7 +83,7 @@ func (_ SchemaValueProperty) Type() string {
 
 type SchemaBoolProperty struct {
 	*SchemaProperty
-	Default bool
+	Default bool `json:"default,omitempty"`
 }
 
 func (_ SchemaBoolProperty) Type() string {
@@ -91,9 +92,9 @@ func (_ SchemaBoolProperty) Type() string {
 
 type SchemaIntProperty struct {
 	*SchemaProperty
-	Minimum int
-	Maximum int
-	Default int
+	Minimum int `json:"minimum,omitempty"`
+	Maximum int `json:"maximum,omitempty"`
+	Default int `json:"default,omitempty"`
 }
 
 func (_ SchemaIntProperty) Type() string {
@@ -102,19 +103,19 @@ func (_ SchemaIntProperty) Type() string {
 
 type SchemaFloatProperty struct {
 	*SchemaProperty
-	Minimum float64
-	Maximum float64
-	Default float64
+	Minimum float64 `json:"minimum,omitempty"`
+	Maximum float64 `json:"maximum,omitempty"`
+	Default float64 `json:"default,omitempty"`
 }
 
 func (_ SchemaFloatProperty) Type() string {
-	return "float"
+	return "float64"
 }
 
 type SchemaArrayProperty struct {
 	*SchemaProperty
-	Items   SchemaItem
-	Default any
+	Items   SchemaItem `json:"items,omitempty"`
+	Default any        `json:"default,omitempty"`
 }
 
 func (_ SchemaArrayProperty) Type() string {
@@ -122,18 +123,18 @@ func (_ SchemaArrayProperty) Type() string {
 }
 
 type SchemaEnumValue struct {
-	Name        string
-	Description string
+	Name        string `json:"name,omitempty"`
+	Description string `json:"description,omitempty"`
 }
 
 type SchemaStringProperty struct {
 	*SchemaProperty
-	Enum      []SchemaEnumValue
-	MinLength int
-	MaxLength int
-	Pattern   string
-	Format    string
-	Default   string
+	Enum      []SchemaEnumValue `json:"enum,omitempty"`
+	MinLength int               `json:"minLength,omitempty"`
+	MaxLength int               `json:"maxLength,omitempty"`
+	Pattern   string            `json:"pattern,omitempty"`
+	Format    string            `json:"format,omitempty"`
+	Default   string            `json:"default,omitempty"`
 }
 
 func (_ SchemaStringProperty) Type() string {
@@ -142,14 +143,14 @@ func (_ SchemaStringProperty) Type() string {
 
 type SchemaObjectProperty struct {
 	*SchemaProperty
-	Properties           []SchemaItem
-	AdditionalProperties SchemaItem
-	PatternProperties    []SchemaItem
-	Import               string
-	IsInstanceOf         string
-	Functions            []*SchemaFunctionProperty
-	Events               []*SchemaFunctionProperty
-	Default              any
+	Properties           []SchemaItem              `json:"properties,omitempty"`
+	AdditionalProperties SchemaItem                `json:"additionalProperties,omitempty"`
+	PatternProperties    []SchemaItem              `json:"patternProperties,omitempty"`
+	Import               string                    `json:"import,omitempty"`
+	IsInstanceOf         string                    `json:"isInstanceOf,omitempty"`
+	Functions            []*SchemaFunctionProperty `json:"functions,omitempty"`
+	Events               []*SchemaFunctionProperty `json:"events,omitempty"`
+	Default              any                       `json:"default,omitempty"`
 }
 
 func (_ SchemaObjectProperty) Type() string {
@@ -158,14 +159,14 @@ func (_ SchemaObjectProperty) Type() string {
 
 type SchemaFunctionProperty struct {
 	*SchemaProperty
-	Async                           bool
-	RequireUserInput                bool
-	Parameters                      []SchemaItem // uh
-	ExtraParameters                 []SchemaItem
-	Returns                         SchemaItem
-	Filters                         []SchemaItem
-	AllowAmbiguousOptionalArguments bool
-	AllowCrossOriginArguments       bool
+	Async                           bool         `json:"async,omitempty"`
+	RequireUserInput                bool         `json:"requireUserInput,omitempty"`
+	Parameters                      []SchemaItem `json:"parameters,omitempty"`
+	ExtraParameters                 []SchemaItem `json:"extraParameters,omitempty"`
+	Returns                         SchemaItem   `json:"returns,omitempty"`
+	Filters                         []SchemaItem `json:"filters,omitempty"`
+	AllowAmbiguousOptionalArguments bool         `json:"allowAmbiguousOptionalArguments,omitempty"`
+	AllowCrossOriginArguments       bool         `json:"allowCrossOriginArguments,omitempty"`
 }
 
 func (_ SchemaFunctionProperty) Type() string {
@@ -175,13 +176,13 @@ func (_ SchemaFunctionProperty) Type() string {
 // a namespace will map to a file
 type SchemaNamespace struct {
 	*SchemaProperty
-	Properties      []SchemaItem
-	Types           []SchemaItem
-	Functions       []*SchemaFunctionProperty
-	Events          []*SchemaFunctionProperty
-	DefaultContexts []string
-	NoCompile       bool // what is the purpose of this
-	Import          string
+	Properties      []SchemaItem              `json:"properties,omitempty"`
+	Types           []SchemaItem              `json:"types,omitempty"`
+	Functions       []*SchemaFunctionProperty `json:"functions,omitempty"`
+	Events          []*SchemaFunctionProperty `json:"events,omitempty"`
+	DefaultContexts []string                  `json:"defaultContexts,omitempty"`
+	NoCompile       bool                      `json:"noCompile,omitempty"`
+	Import          string                    `json:"import,omitempty"`
 }
 
 func (_ SchemaNamespace) Type() string {

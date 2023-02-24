@@ -49,7 +49,8 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	output, err := generate.Convert(result)
+	cleaned:= generate.Clean(result)
+	output, err := generate.Convert(cleaned)
 	if err != nil {
 		log.Fatal(err)
 	}
