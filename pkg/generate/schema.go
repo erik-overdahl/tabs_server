@@ -227,6 +227,20 @@ func Convert(json JSON) ([]SchemaItem, error) {
 	return nil, fmt.Errorf("cannot read object of type %T to a schema object", json)
 }
 
+func MergeNamespaces(namespaces []*SchemaNamespace) []*SchemaNamespace {
+	spaces := map[string]*SchemaNamespace{}
+	for i, info := range namespaces {
+		ns, exists := spaces[info.Name]
+		if !exists {
+			spaces[info.Name] = info
+			continue
+		}
+		spaces[info.Name] = merge(ns, info)
+		namespaces = remove(i, namespaces)
+	}
+	return namespaces
+}
+
 func determineType(json *ObjNode) (SchemaItem, error) {
 	var item SchemaItem
 	base := &SchemaProperty{}
@@ -419,6 +433,32 @@ func exportable(s string) string {
 		return string(s[0]-32) + s[1:]
 	}
 	return s
+}
+
+func merge[T any](target, source T) T {
+	vTarget := reflect.ValueOf(target).Elem()
+	vSource := reflect.ValueOf(source).Elem()
+	if vTarget == vSource {
+		return target
+	}
+	typ := vTarget.Type()
+	for i := 0; i < typ.NumField(); i++ {
+		t, s := vTarget.Field(i), vSource.Field(i)
+		switch {
+		case s.IsZero() || !t.CanSet():
+			continue
+		case t.IsZero():
+			t.Set(s)
+		default:
+			switch typ.Field(i).Type.Kind() {
+			case reflect.Slice:
+				t.Set(reflect.AppendSlice(t, s))
+			case reflect.Pointer, reflect.Interface:
+				t.Set(reflect.ValueOf(merge(t.Interface(), s.Interface())))
+			}
+		}
+	}
+	return target
 }
 
 func wrap[T any, Y any](f func(T) (Y, error)) func(*ListNode) ([]Y, error) {
