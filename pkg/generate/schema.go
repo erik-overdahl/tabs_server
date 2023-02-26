@@ -229,10 +229,13 @@ func Convert(json JSON) ([]SchemaItem, error) {
 
 func MergeNamespaces(namespaces []*SchemaNamespace) []*SchemaNamespace {
 	spaces := map[string]*SchemaNamespace{}
-	for i, info := range namespaces {
+	i := 0
+	for i < len(namespaces) {
+		info := namespaces[i]
 		ns, exists := spaces[info.Name]
 		if !exists {
 			spaces[info.Name] = info
+			i++
 			continue
 		}
 		spaces[info.Name] = merge(ns, info)
