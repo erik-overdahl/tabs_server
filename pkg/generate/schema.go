@@ -18,6 +18,7 @@ type SchemaProperty struct {
 	Name               string   `json:"name,omitempty"`
 	Ref                string   `json:"ref,omitempty"`
 	Extend             string   `json:"extend,omitempty"`
+	Import             string   `json:"import,omitempty"`
 	Description        string   `json:"description,omitempty"`
 	Optional           bool     `json:"optional,omitempty"`
 	Unsupported        bool     `json:"unsupported,omitempty"`
@@ -146,7 +147,6 @@ type SchemaObjectProperty struct {
 	Properties           []SchemaItem              `json:"properties,omitempty"`
 	AdditionalProperties SchemaItem                `json:"additionalProperties,omitempty"`
 	PatternProperties    []SchemaItem              `json:"patternProperties,omitempty"`
-	Import               string                    `json:"import,omitempty"`
 	IsInstanceOf         string                    `json:"isInstanceOf,omitempty"`
 	Functions            []*SchemaFunctionProperty `json:"functions,omitempty"`
 	Events               []*SchemaFunctionProperty `json:"events,omitempty"`
