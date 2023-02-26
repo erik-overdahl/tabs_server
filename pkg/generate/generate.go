@@ -130,37 +130,33 @@ func (pkg *Pkg) AddClient() {
 }
 
 func (pkg *Pkg) AddFunction(item *SchemaFunctionProperty) error {
-	params := []jen.Code{}
+	var paramItems, returnItems []SchemaItem
 	var callback SchemaItem
 	for _, param := range item.Parameters {
 		if param.Base().Name == "callback" || param.Base().Name == "responseCallback" {
 			callback = param
 			continue
 		}
-		p := jen.Id(param.Base().Name).Add(getPropertyType(param))
-		params = append(params, p)
+		paramItems = append(paramItems, param)
+		// switch t := param.(type) {
+		// case *SchemaArrayProperty:
+
+		// }
 	}
 
-	returns := jen.Error()
 	if item.Returns != nil {
-		returns = jen.Params(getPropertyType(item.Returns), jen.Error())
+		returnItems = append(returnItems, item.Returns)
 	} else if item.Async && callback != nil {
 		c, ok := callback.(*SchemaFunctionProperty)
 		if !ok {
 			return fmt.Errorf("function '%s': callback: expected %T, got %T", item.Name, c, callback)
 		}
-		if len(c.Parameters) > 0 {
-			returns = jen.ParamsFunc(func(g *jen.Group) {
-				for _, param := range c.Parameters {
-					// if obj, ok := param.(*SchemaObjectProperty); ok {
-
-					// 	continue
-					// }
-					g.Add(jen.Id(param.Base().Name).
-						Add(getPropertyType(param)))
-				}
-				g.Add(jen.Err().Error())
-			})
+		for _, param := range c.Parameters {
+			// create a struct if necessary
+			// if obj, ok := param.(*SchemaObjectProperty); ok {
+			// 	continue
+			// }
+			returnItems = append(returnItems, param)
 		}
 	}
 
@@ -169,15 +165,75 @@ func (pkg *Pkg) AddFunction(item *SchemaFunctionProperty) error {
 	}
 	pkg.ClientFile.Func().Params(jen.Id("client").Op("*").Id("Client")).
 		Id(exportable(item.Name)).
-		Params(params...).Add(returns).
-		Block().Do(func(s *jen.Statement) {
-		if len(*returns) > 1 {
-			// for i := 0; i < len(*returns) - 2; i++ {
-			// 	s.Var().
-			// }
-		}
-	})
+		ParamsFunc(func(g *jen.Group) {
+			for _, param := range paramItems {
+				g.Add(funcParamId(param).Add(getPropertyType(param)))
+			}
+		}).
+		ParamsFunc(func(g *jen.Group) {
+			if len(returnItems) > 0 {
+				retItem := returnItems[0]
+				if retItem.Base().Name != "" {
+					g.Add(funcParamId(retItem)).Add(getPropertyType(retItem))
+				} else {
+					g.Id("result").Add(getPropertyType(retItem))
+				}
+			}
+			g.Err().Error()
+		}).
+		BlockFunc(func(g *jen.Group) {
+			var unmarshal jen.Code
+			data := jen.Nil()
+			varname := "_"
+			// in practice, only ever 1 of these
+			if len(paramItems) > 0 {
+				structValues := jen.Dict{}
+				data = jen.StructFunc(func(g *jen.Group) {
+					for _, param := range paramItems {
+						tag := param.Base().Name
+						if param.Base().Optional {
+							tag += ",omitempty"
+						}
+						structId := jen.Id(exportable(param.Base().Name))
+						structValues[structId.Clone()] = funcParamId(param)
+						g.Add(structId).Add(getPropertyType(param)).
+							Tag(map[string]string{"json": tag})
+					}
+				}).Values(structValues)
+			}
+			if len(returnItems) > 0 {
+				varname = "response"
+				unmarshal = jen.Else().If(
+					jen.Err().Op(":=").Qual("json", "Unmarshal").
+						CallFunc(func(g *jen.Group) {
+							g.Id(varname).Dot("Data")
+							if returnItems[0].Base().Name != "" {
+								g.Op("&").Add(funcParamId(returnItems[0]))
+							} else {
+								g.Op("&").Add(jen.Id("result"))
+							}
+						}),
+					jen.Err().Op("!=").Nil(),
+				).Block(jen.Return(jen.Nil(), jen.Err()))
+			}
+			g.If(
+				jen.List(jen.Id(varname), jen.Err()).Op(":=").
+					Id("client").Dot("gateway").Dot("Request").
+					Call(jen.Lit(item.Name), data),
+				jen.Err().Op("!=").Nil()).
+				Block(jen.Return(jen.Nil(), jen.Err())).
+				Add(unmarshal)
+			g.Return()
+		})
 	return nil
+}
+
+func funcParamId(param SchemaItem) *jen.Statement {
+	name := param.Base().Name
+	if jen.IsReservedWord(name) {
+		name = "_" + name
+	}
+	return jen.Id(name)
 }
 
 func (pkg *Pkg) AddStruct(item *SchemaObjectProperty, name string) {
