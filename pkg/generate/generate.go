@@ -103,7 +103,7 @@ func (pkg *Pkg) AddEnum(enum *SchemaStringProperty) error {
 	f.Const().DefsFunc(func(g *jen.Group) {
 		for _, e := range enum.Enum {
 			if e.Description != "" {
-				f.Comment(e.Description)
+				g.Comment(e.Description)
 			}
 			sanitized := strings.ReplaceAll(e.Name, "-", "_")
 			g.Id(name + "_" + strings.ToUpper(camelToSnake(sanitized))).
