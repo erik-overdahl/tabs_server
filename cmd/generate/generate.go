@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/dave/jennifer/jen"
 	"github.com/erik-overdahl/tabs_server/pkg/generate"
@@ -29,37 +30,56 @@ func main() {
 		os.Exit(0)
 	}
 
-	schemaFile := os.Args[1]
+	fileGlob := os.Args[1]
 	// outputFile := os.Args[2]
-	file, err := os.Open(schemaFile)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
 
-	content, err := io.ReadAll(file)
+	files, err := filepath.Glob(fileGlob)
+	log.Printf("Parsing %d files\n", len(files))
 	if err != nil {
 		log.Fatal(err)
 	}
-	tokens, err := generate.TokenizeJson(content)
-	if err != nil {
-		log.Fatal(err)
+
+	schemas := []generate.SchemaItem{}
+	for _, f := range files {
+		file, err := os.Open(f)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer file.Close()
+
+		content, err := io.ReadAll(file)
+		if err != nil {
+			log.Fatal(err)
+		}
+		tokens, err := generate.TokenizeJson(content)
+		if err != nil {
+			log.Fatal(err)
+		}
+		parser := generate.MakeTokenParser()
+		result, err := parser.Parse(tokens)
+		if err != nil {
+			log.Fatal(err)
+		}
+		cleaned:= generate.Clean(result)
+		output, err := generate.Convert(cleaned)
+		if err != nil {
+			log.Fatal(err)
+		}
+		schemas = append(schemas, output...)
 	}
-	parser := generate.MakeTokenParser()
-	result, err := parser.Parse(tokens)
-	if err != nil {
-		log.Fatal(err)
-	}
-	cleaned:= generate.Clean(result)
-	output, err := generate.Convert(cleaned)
-	if err != nil {
-		log.Fatal(err)
-	}
-	for _, item := range output {
+
+	namespaces := []*generate.SchemaNamespace{}
+	for _, item := range schemas {
 		ns, ok := item.(*generate.SchemaNamespace)
-		if !ok || ns.Name == "manifest" {
+		if !ok {
 			continue
 		}
+		namespaces = append(namespaces, ns)
+	}
+	namespaces = generate.MergeNamespaces(namespaces)
+	log.Printf("Generating %d packages\n", len(namespaces))
+	for _, ns := range namespaces {
+		fmt.Println(ns.Name)
 		pkg := generate.MakePkg(ns.Name)
 		if err != nil {
 			log.Fatal(err)
