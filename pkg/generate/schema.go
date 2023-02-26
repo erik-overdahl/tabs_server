@@ -408,33 +408,6 @@ func parseEnum(lst *ListNode) ([]SchemaEnumValue, error) {
 	})
 }
 
-func snakeToCamel(s string) string {
-	res := []byte{}
-	upcase := false
-	for i := range s {
-		c := s[i]
-		if c == '_' {
-			upcase = true
-			continue
-		} else if upcase && 96 < c {
-			c -= 32
-			upcase = false
-		}
-		res = append(res, c)
-	}
-	return string(res)
-}
-
-func exportable(s string) string {
-	if s[0] == '$' {
-		s = s[1:]
-	}
-	if 96 < s[0] {
-		return string(s[0]-32) + s[1:]
-	}
-	return s
-}
-
 func merge[T any](target, source T) T {
 	vTarget := reflect.ValueOf(target).Elem()
 	vSource := reflect.ValueOf(source).Elem()

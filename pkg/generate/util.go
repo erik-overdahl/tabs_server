@@ -47,3 +47,43 @@ func remove[T any](i int, list []T) []T {
 		return append(list[:i], list[i+1:]...)
 	}
 }
+
+func snakeToCamel(s string) string {
+	res := []byte{}
+	upcase := false
+	for i := range s {
+		c := s[i]
+		if c == '_' {
+			upcase = true
+			continue
+		} else if upcase && 96 < c {
+			c -= 32
+			upcase = false
+		}
+		res = append(res, c)
+	}
+	return string(res)
+}
+
+func camelToSnake(s string) string {
+	out := []byte{}
+	for i := range s {
+		c := s[i]
+		if 64 < c && c < 91 {
+			out = append(out, '_', c+32)
+		} else {
+			out = append(out, c)
+		}
+	}
+	return string(out)
+}
+
+func exportable(s string) string {
+	if s[0] == '$' {
+		s = s[1:]
+	}
+	if 96 < s[0] {
+		return string(s[0]-32) + s[1:]
+	}
+	return s
+}
