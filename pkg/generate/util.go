@@ -69,7 +69,7 @@ func camelToSnake(s string) string {
 	out := []byte{}
 	for i := range s {
 		c := s[i]
-		if 64 < c && c < 91 {
+		if 64 < c && c < 91 && 0 < i && 96 < s[i-1] {
 			out = append(out, '_', c+32)
 		} else {
 			out = append(out, c)
