@@ -115,7 +115,7 @@ func (pkg *Pkg) AddEnum(enum *SchemaStringProperty) error {
 	f := pkg.TypeFile
 	var name string
 	if enum.Base().Name != "" {
-		name = exportable(enum.Base().Name)
+		name = exportable(snakeToCamel(enum.Base().Name))
 	} else if enum.Base().Id != "" {
 		name = exportable(enum.Base().Id)
 	}
@@ -125,9 +125,10 @@ func (pkg *Pkg) AddEnum(enum *SchemaStringProperty) error {
 			if e.Description != "" {
 				g.Comment(e.Description)
 			}
-			sanitized := strings.ReplaceAll(e.Name, "-", "_")
-			g.Id(name + "_" + strings.ToUpper(camelToSnake(sanitized))).
-				Id(name).Op("=").Lit(e.Name)
+			sanitized := strings.ToUpper(camelToSnake(e.Name))
+			sanitized = strings.ReplaceAll(sanitized, "-", "_")
+			sanitized = strings.ReplaceAll(sanitized, ".", "_")
+			g.Id(name + "_" + sanitized).Id(name).Op("=").Lit(e.Name)
 		}
 	})
 	return nil
