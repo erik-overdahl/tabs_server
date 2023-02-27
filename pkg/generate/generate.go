@@ -91,6 +91,26 @@ func (pkg *Pkg) AddNamespaceProperties(props []SchemaItem) error {
 	return nil
 }
 
+func (pkg *Pkg) AddAlias(item SchemaItem) {
+	f := pkg.TypeFile
+	switch item := item.(type) {
+	case *SchemaObjectProperty:
+		if 0 < len(item.PatternProperties) {
+			// TODO
+			f.Type().Id(exportable(snakeToCamel(item.Name))).
+				Map(String()).Any()
+		}
+	default:
+		var name string
+		if item.Base().Name != "" {
+			name = exportable(snakeToCamel(item.Base().Name))
+		} else if item.Base().Id != "" {
+			name = exportable(item.Base().Id)
+		}
+		f.Type().Id(exportable(snakeToCamel(name))).Add(getPropertyType(item))
+	}
+}
+
 func (pkg *Pkg) AddEnum(enum *SchemaStringProperty) error {
 	f := pkg.TypeFile
 	var name string
