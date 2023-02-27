@@ -98,7 +98,7 @@ func (pkg *Pkg) AddAlias(item SchemaItem) {
 		if 0 < len(item.PatternProperties) {
 			// TODO
 			f.Type().Id(exportable(snakeToCamel(item.Name))).
-				Map(String()).Any()
+				Map(jen.String()).Any()
 		}
 	default:
 		var name string
@@ -157,6 +157,14 @@ func (pkg *Pkg) AddFunction(item *SchemaFunctionProperty) error {
 		if param.Base().Name == "callback" || param.Base().Name == "responseCallback" {
 			callback = param
 			continue
+		}
+		switch param := param.(type) {
+		case *SchemaObjectProperty:
+			pkg.AddStruct(param, "")
+		case *SchemaStringProperty:
+			if 0 < len(param.Enum) {
+				pkg.AddEnum(param)
+			}
 		}
 		paramItems = append(paramItems, param)
 		// switch t := param.(type) {
@@ -262,6 +270,18 @@ func funcParamId(param SchemaItem) *jen.Statement {
 }
 
 func (pkg *Pkg) AddStruct(item *SchemaObjectProperty, name string) {
+	if 0 < len(item.PatternProperties) {
+		pkg.AddAlias(item)
+		return
+	} else if item.Extend != "" {
+		// not sure this is right
+		for _, p := range item.Properties {
+			if p, ok := p.(*SchemaObjectProperty); ok {
+				pkg.AddStruct(p, "")
+			}
+		}
+		return
+	}
 	f := pkg.TypeFile
 	if item.Description != "" {
 		f.Comment(item.Description)
@@ -276,7 +296,15 @@ func (pkg *Pkg) AddStruct(item *SchemaObjectProperty, name string) {
 	}
 
 	f.Type().Id(exportable(name)).StructFunc(func(g *jen.Group) {
+		if item.Extend != "" {
+			g.Id(item.Extend)
+		}
 		for _, raw := range item.Properties {
+			if obj, ok := raw.(*SchemaObjectProperty); ok {
+				pkg.AddStruct(obj, snakeToCamel(obj.Name))
+			} else if enum, ok := raw.(*SchemaStringProperty); ok && len(enum.Enum) > 0 {
+				pkg.AddEnum(enum)
+			}
 			info := raw.Base()
 			if info.Description != "" {
 				g.Comment(info.Description)
