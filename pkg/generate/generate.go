@@ -270,9 +270,20 @@ func (pkg *Pkg) AddStruct(item *SchemaObjectProperty, name string) {
 	})
 }
 
-func buildEvent(item SchemaFunctionProperty) (jen.Code, error) {
-	out := jen.Func()
-	return out, nil
+func (pkg *Pkg) AddEvent(item *SchemaFunctionProperty) {
+	// f := pkg.TypeFile
+	if 1 < len(item.Parameters) {
+		// collect those parameters into an object
+		_struct := &SchemaObjectProperty{SchemaProperty:
+			&SchemaProperty{Name: exportable(item.Name) + "Event"},
+			Properties: item.Parameters,
+		}
+		pkg.AddStruct(_struct, "")
+	} else if 1 == len(item.Parameters) {
+		if ret, ok := item.Parameters[0].(*SchemaObjectProperty); ok {
+			pkg.AddStruct(ret, exportable(item.Name) + exportable(ret.Name))
+		}
+	}
 }
 
 func getPropertyType(item SchemaItem) jen.Code {
