@@ -369,7 +369,8 @@ func getPropertyType(item SchemaItem) jen.Code {
 		if typ == nil {
 			b, _ := json.Marshal(item)
 			fmt.Printf("Where is the type for %s???\n", string(b))
-
+			// TODO
+			typ = jen.Struct()
 		}
 		return typ
 	case *SchemaStringProperty:
