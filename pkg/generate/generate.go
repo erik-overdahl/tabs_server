@@ -61,13 +61,13 @@ func (pkg *Pkg) AddNamespaceProperties(props []SchemaItem) error {
 		switch prop := prop.(type) {
 		case *SchemaValueProperty:
 			if prop.Description != "" {
-				f.Comment(prop.Description)
+				f.Comment(linewrap(prop.Description, 80))
 			}
 			f.Const().Id(name).Op("=").Lit(prop.Value)
 
 		case *SchemaRefProperty:
 			if prop.Description != "" {
-				f.Comment(prop.Description)
+				f.Comment(linewrap(prop.Description, 80))
 			}
 			ref := strings.Split(prop.Ref, ".")
 			if len(ref) == 2 {
@@ -123,7 +123,7 @@ func (pkg *Pkg) AddEnum(enum *SchemaStringProperty) error {
 	f.Const().DefsFunc(func(g *jen.Group) {
 		for _, e := range enum.Enum {
 			if e.Description != "" {
-				g.Comment(e.Description)
+				g.Comment(linewrap(e.Description, 70))
 			}
 			sanitized := strings.ToUpper(camelToSnake(e.Name))
 			sanitized = strings.ReplaceAll(sanitized, "-", "_")
@@ -284,7 +284,7 @@ func (pkg *Pkg) AddStruct(item *SchemaObjectProperty, name string) {
 	}
 	f := pkg.TypeFile
 	if item.Description != "" {
-		f.Comment(item.Description)
+		f.Comment(linewrap(item.Description, 80))
 	}
 
 	switch {
@@ -307,7 +307,7 @@ func (pkg *Pkg) AddStruct(item *SchemaObjectProperty, name string) {
 			}
 			info := raw.Base()
 			if info.Description != "" {
-				g.Comment(info.Description)
+				g.Comment(linewrap(info.Description, 70))
 			}
 			tag := info.Name
 			if info.Optional {

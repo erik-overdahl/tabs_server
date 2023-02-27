@@ -3,6 +3,7 @@ package generate
 import (
 	"fmt"
 	"reflect"
+	"strings"
 )
 
 type Stack[T any] struct {
@@ -91,6 +92,26 @@ func exportable(s string) string {
 		return string(s[0]-32) + s[1:]
 	}
 	return s
+}
+
+// insert a newline every n characters in the string
+func linewrap(s string, lineLength int) string {
+	if len(s) < lineLength {
+		return s
+	}
+	pieces := strings.Split(s, " ")
+	lines := []string{pieces[0]}
+	for _, p := range pieces[1:] {
+		currLine := lines[len(lines) - 1]
+		// if adding p to the line would go past the line len,
+		// start a new line
+		if lineLength < len(currLine) + len(p) {
+			lines = append(lines, p)
+			continue
+		}
+		lines[len(lines) - 1] += " " + p
+	}
+	return strings.Join(lines, string('\n'))
 }
 
 func mapf[T any, Y any](lst []T, f func(T) (Y, error)) ([]Y, error) {
