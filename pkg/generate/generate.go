@@ -181,66 +181,70 @@ func (pkg *Pkg) AddFunction(item *SchemaFunctionProperty) error {
 		}
 	}
 
+	params := jen.ParamsFunc(func(g *jen.Group) {
+		for _, param := range paramItems {
+			g.Add(funcParamId(param).Add(getPropertyType(param)))
+		}
+	})
+
+	returned := jen.ParamsFunc(func(g *jen.Group) {
+		if len(returnItems) > 0 {
+			retItem := returnItems[0]
+			if retItem.Base().Name != "" {
+				g.Add(funcParamId(retItem)).Add(getPropertyType(retItem))
+			} else {
+				g.Id("result").Add(getPropertyType(retItem))
+			}
+		}
+		g.Err().Error()
+	})
+
+	requestData := jen.Nil()
+	if len(paramItems) > 0 {
+		structValues := jen.Dict{}
+		requestData = jen.StructFunc(func(g *jen.Group) {
+			for _, param := range paramItems {
+				tag := param.Base().Name
+				if param.Base().Optional {
+					tag += ",omitempty"
+				}
+				structId := jen.Id(exportable(param.Base().Name))
+				structValues[structId.Clone()] = funcParamId(param)
+				g.Add(structId).Add(getPropertyType(param)).
+					Tag(map[string]string{"json": tag})
+			}
+		}).Values(structValues)
+	}
+
+	var unmarshal jen.Code
+	var varname string = "_"
+	// in practice, only ever 1 of these
+	if 0 < len(returnItems) {
+		varname = "response"
+		unmarshal = jen.Else().If(
+			jen.Err().Op(":=").Qual("json", "Unmarshal").
+				CallFunc(func(g *jen.Group) {
+					g.Id(varname).Dot("Data")
+					if returnItems[0].Base().Name != "" {
+						g.Op("&").Add(funcParamId(returnItems[0]))
+					} else {
+						g.Op("&").Add(jen.Id("result"))
+					}
+				}),
+			jen.Err().Op("!=").Nil(),
+		).Block(jen.Return(jen.Nil(), jen.Err()))
+	}
+
 	if item.Description != "" {
-		pkg.ClientFile.Comment(item.Description)
+		pkg.ClientFile.Comment(linewrap(item.Description, 80))
 	}
 	pkg.ClientFile.Func().Params(jen.Id("client").Op("*").Id("Client")).
-		Id(exportable(item.Name)).
-		ParamsFunc(func(g *jen.Group) {
-			for _, param := range paramItems {
-				g.Add(funcParamId(param).Add(getPropertyType(param)))
-			}
-		}).
-		ParamsFunc(func(g *jen.Group) {
-			if len(returnItems) > 0 {
-				retItem := returnItems[0]
-				if retItem.Base().Name != "" {
-					g.Add(funcParamId(retItem)).Add(getPropertyType(retItem))
-				} else {
-					g.Id("result").Add(getPropertyType(retItem))
-				}
-			}
-			g.Err().Error()
-		}).
+		Id(exportable(item.Name)).Add(params).Add(returned).
 		BlockFunc(func(g *jen.Group) {
-			var unmarshal jen.Code
-			data := jen.Nil()
-			varname := "_"
-			// in practice, only ever 1 of these
-			if len(paramItems) > 0 {
-				structValues := jen.Dict{}
-				data = jen.StructFunc(func(g *jen.Group) {
-					for _, param := range paramItems {
-						tag := param.Base().Name
-						if param.Base().Optional {
-							tag += ",omitempty"
-						}
-						structId := jen.Id(exportable(param.Base().Name))
-						structValues[structId.Clone()] = funcParamId(param)
-						g.Add(structId).Add(getPropertyType(param)).
-							Tag(map[string]string{"json": tag})
-					}
-				}).Values(structValues)
-			}
-			if len(returnItems) > 0 {
-				varname = "response"
-				unmarshal = jen.Else().If(
-					jen.Err().Op(":=").Qual("json", "Unmarshal").
-						CallFunc(func(g *jen.Group) {
-							g.Id(varname).Dot("Data")
-							if returnItems[0].Base().Name != "" {
-								g.Op("&").Add(funcParamId(returnItems[0]))
-							} else {
-								g.Op("&").Add(jen.Id("result"))
-							}
-						}),
-					jen.Err().Op("!=").Nil(),
-				).Block(jen.Return(jen.Nil(), jen.Err()))
-			}
 			g.If(
 				jen.List(jen.Id(varname), jen.Err()).Op(":=").
 					Id("client").Dot("gateway").Dot("Request").
-					Call(jen.Lit(item.Name), data),
+					Call(jen.Lit(item.Name), requestData),
 				jen.Err().Op("!=").Nil()).
 				Block(jen.Return(jen.Nil(), jen.Err())).
 				Add(unmarshal)
