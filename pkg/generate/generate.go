@@ -295,7 +295,7 @@ func (pkg *Pkg) AddStruct(item *SchemaObjectProperty, name string) {
 		name = item.Id
 	}
 
-	f.Type().Id(exportable(name)).StructFunc(func(g *jen.Group) {
+	f.Type().Id(exportable(snakeToCamel(name))).StructFunc(func(g *jen.Group) {
 		if item.Extend != "" {
 			g.Id(item.Extend)
 		}
@@ -313,7 +313,7 @@ func (pkg *Pkg) AddStruct(item *SchemaObjectProperty, name string) {
 			if info.Optional {
 				tag += ",omitempty"
 			}
-			g.Id(exportable(info.Name)).Add(getPropertyType(raw)).
+			g.Id(exportable(snakeToCamel(info.Name))).Add(getPropertyType(raw)).
 				Tag(map[string]string{"json": tag})
 		}
 		if item.AdditionalProperties != nil {
@@ -357,7 +357,7 @@ func getPropertyType(item SchemaItem) jen.Code {
 		case p.Import != "":
 			typ = jen.Id(exportable(p.Import))
 		case p.Name != "":
-			typ = jen.Id(exportable(p.Name))
+			typ = jen.Id(exportable(snakeToCamel(p.Name)))
 		default:
 			if o, ok := item.(*SchemaObjectProperty); ok && o.IsInstanceOf != "" {
 				typ = jen.Id(o.IsInstanceOf)
