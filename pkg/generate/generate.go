@@ -328,7 +328,7 @@ func (pkg *Pkg) AddEvent(item *SchemaFunctionProperty) {
 	if 1 < len(item.Parameters) {
 		// collect those parameters into an object
 		_struct := &SchemaObjectProperty{SchemaProperty:
-			&SchemaProperty{Name: exportable(item.Name) + "Event"},
+			SchemaProperty{Name: exportable(item.Name) + "Event"},
 			Properties: item.Parameters,
 		}
 		pkg.AddStruct(_struct, "")

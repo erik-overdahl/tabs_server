@@ -8,12 +8,11 @@ import (
 
 type SchemaItem interface {
 	Type() string
-	Base() *SchemaProperty
+	Base() SchemaProperty
 }
 
 // the base type
 type SchemaProperty struct {
-	Type_              string   `json:"type"`
 	Id                 string   `json:"id,omitempty"`
 	Name               string   `json:"name,omitempty"`
 	Ref                string   `json:"ref,omitempty"`
@@ -34,13 +33,13 @@ func (_ SchemaProperty) Type() string {
 	return "property"
 }
 
-func (this *SchemaProperty) Base() *SchemaProperty {
+func (this SchemaProperty) Base() SchemaProperty {
 	return this
 }
 
 // if there is a "choices" property
 type SchemaChoicesProperty struct {
-	*SchemaProperty
+	SchemaProperty
 	Choices []SchemaItem `json:"choices,omitempty"`
 	Default any          `json:"default,omitempty"`
 }
@@ -50,7 +49,7 @@ func (_ SchemaChoicesProperty) Type() string {
 }
 
 type SchemaAnyProperty struct {
-	*SchemaProperty
+	SchemaProperty
 }
 
 func (_ SchemaAnyProperty) Type() string {
@@ -58,7 +57,7 @@ func (_ SchemaAnyProperty) Type() string {
 }
 
 type SchemaRefProperty struct {
-	*SchemaProperty
+	SchemaProperty
 }
 
 func (_ SchemaRefProperty) Type() string {
@@ -66,7 +65,7 @@ func (_ SchemaRefProperty) Type() string {
 }
 
 type SchemaNullProperty struct {
-	*SchemaProperty
+	SchemaProperty
 }
 
 func (_ SchemaNullProperty) Type() string {
@@ -74,7 +73,7 @@ func (_ SchemaNullProperty) Type() string {
 }
 
 type SchemaValueProperty struct {
-	*SchemaProperty
+	SchemaProperty
 	Value any `json:"value,omitempty"`
 }
 
@@ -83,7 +82,7 @@ func (_ SchemaValueProperty) Type() string {
 }
 
 type SchemaBoolProperty struct {
-	*SchemaProperty
+	SchemaProperty
 	Default bool `json:"default,omitempty"`
 }
 
@@ -92,7 +91,7 @@ func (_ SchemaBoolProperty) Type() string {
 }
 
 type SchemaIntProperty struct {
-	*SchemaProperty
+	SchemaProperty
 	Minimum int `json:"minimum,omitempty"`
 	Maximum int `json:"maximum,omitempty"`
 	Default int `json:"default,omitempty"`
@@ -103,7 +102,7 @@ func (_ SchemaIntProperty) Type() string {
 }
 
 type SchemaFloatProperty struct {
-	*SchemaProperty
+	SchemaProperty
 	Minimum float64 `json:"minimum,omitempty"`
 	Maximum float64 `json:"maximum,omitempty"`
 	Default float64 `json:"default,omitempty"`
@@ -114,7 +113,7 @@ func (_ SchemaFloatProperty) Type() string {
 }
 
 type SchemaArrayProperty struct {
-	*SchemaProperty
+	SchemaProperty
 	Items   SchemaItem `json:"items,omitempty"`
 	Default any        `json:"default,omitempty"`
 }
@@ -129,7 +128,7 @@ type SchemaEnumValue struct {
 }
 
 type SchemaStringProperty struct {
-	*SchemaProperty
+	SchemaProperty
 	Enum      []SchemaEnumValue `json:"enum,omitempty"`
 	MinLength int               `json:"minLength,omitempty"`
 	MaxLength int               `json:"maxLength,omitempty"`
@@ -143,7 +142,7 @@ func (_ SchemaStringProperty) Type() string {
 }
 
 type SchemaObjectProperty struct {
-	*SchemaProperty
+	SchemaProperty
 	Properties           []SchemaItem              `json:"properties,omitempty"`
 	AdditionalProperties SchemaItem                `json:"additionalProperties,omitempty"`
 	PatternProperties    []SchemaItem              `json:"patternProperties,omitempty"`
@@ -158,7 +157,7 @@ func (_ SchemaObjectProperty) Type() string {
 }
 
 type SchemaFunctionProperty struct {
-	*SchemaProperty
+	SchemaProperty
 	Async                           bool         `json:"async,omitempty"`
 	RequireUserInput                bool         `json:"requireUserInput,omitempty"`
 	Parameters                      []SchemaItem `json:"parameters,omitempty"`
@@ -175,7 +174,7 @@ func (_ SchemaFunctionProperty) Type() string {
 
 // a namespace will map to a file
 type SchemaNamespace struct {
-	*SchemaProperty
+	SchemaProperty
 	Properties      []SchemaItem              `json:"properties,omitempty"`
 	Types           []SchemaItem              `json:"types,omitempty"`
 	Functions       []*SchemaFunctionProperty `json:"functions,omitempty"`
@@ -246,19 +245,19 @@ func MergeNamespaces(namespaces []*SchemaNamespace) []*SchemaNamespace {
 
 func determineType(json *ObjNode) (SchemaItem, error) {
 	var item SchemaItem
-	base := &SchemaProperty{}
+	// base := SchemaProperty{}
 	for _, kv := range json.Items {
 		switch kv.Key {
 		case "namespace":
-			return &SchemaNamespace{SchemaProperty: base}, nil
+			return &SchemaNamespace{}, nil
 		case "choices":
-			return &SchemaChoicesProperty{SchemaProperty: base}, nil
+			return &SchemaChoicesProperty{}, nil
 		case "$ref":
-			item = &SchemaRefProperty{SchemaProperty: base}
+			item = &SchemaRefProperty{}
 		case "value":
-			return &SchemaValueProperty{SchemaProperty: base}, nil
+			return &SchemaValueProperty{}, nil
 		case "properties":
-			return &SchemaObjectProperty{SchemaProperty: base}, nil
+			return &SchemaObjectProperty{}, nil
 		case "type":
 			typeName, ok := kv.Value.(string)
 			if !ok {
@@ -266,30 +265,30 @@ func determineType(json *ObjNode) (SchemaItem, error) {
 			}
 			switch typeName {
 			case "value":
-				return &SchemaValueProperty{SchemaProperty: base}, nil
+				return &SchemaValueProperty{}, nil
 			case "any":
-				return &SchemaAnyProperty{SchemaProperty: base}, nil
+				return &SchemaAnyProperty{}, nil
 			case "integer":
-				return &SchemaIntProperty{SchemaProperty: base}, nil
+				return &SchemaIntProperty{}, nil
 			case "number":
-				return &SchemaFloatProperty{SchemaProperty: base}, nil
+				return &SchemaFloatProperty{}, nil
 			case "boolean":
-				return &SchemaBoolProperty{SchemaProperty: base}, nil
+				return &SchemaBoolProperty{}, nil
 			case "null":
-				return &SchemaNullProperty{SchemaProperty: base}, nil
+				return &SchemaNullProperty{}, nil
 			case "string":
-				return &SchemaStringProperty{SchemaProperty: base}, nil
+				return &SchemaStringProperty{}, nil
 			case "array":
-				return &SchemaArrayProperty{SchemaProperty: base}, nil
+				return &SchemaArrayProperty{}, nil
 			case "object":
-				return &SchemaObjectProperty{SchemaProperty: base}, nil
+				return &SchemaObjectProperty{}, nil
 			case "function":
-				return &SchemaFunctionProperty{SchemaProperty: base}, nil
+				return &SchemaFunctionProperty{}, nil
 			}
 		}
 	}
 	if item == nil {
-		return base, nil
+		return &SchemaProperty{}, nil
 	}
 	return item, nil
 }
@@ -314,9 +313,9 @@ func setField(item SchemaItem, kv *KeyValueNode) error {
 	fieldName := exportable(snakeToCamel(kv.Key))
 	if kv.Key == "namespace" {
 		fieldName = "Name"
-	} else if kv.Key == "type" {
-		fieldName = "Type_"
-	}
+	} //else if kv.Key == "type" {
+	// 	fieldName = "Type_"
+	// }
 	field := itemValue.FieldByName(fieldName)
 	if field == zero {
 		return nil
@@ -376,7 +375,8 @@ func parseProperty(json *KeyValueNode) (SchemaItem, error) {
 	if err != nil {
 		return nil, err
 	}
-	value.Base().Name = json.Key
+	kv := &KeyValueNode{Key: "Name", Value: json.Key}
+	setField(value, kv)
 	return value, nil
 }
 
