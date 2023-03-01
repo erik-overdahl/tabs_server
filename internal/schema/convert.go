@@ -57,7 +57,6 @@ func MergeNamespaces(namespaces []*Namespace) []*Namespace {
 
 func determineType(json *ojson.Object) (Item, error) {
 	var item Item
-	// base := SchemaProperty{}
 	for _, kv := range json.Items {
 		switch kv.Key {
 		case "namespace":
@@ -70,6 +69,8 @@ func determineType(json *ojson.Object) (Item, error) {
 			return &Value{}, nil
 		case "properties":
 			return &Object{}, nil
+		case "enum":
+			return &Enum{}, nil
 		case "type":
 			typeName, ok := kv.Value.(string)
 			if !ok {
@@ -89,7 +90,7 @@ func determineType(json *ojson.Object) (Item, error) {
 			case "null":
 				return &Null{}, nil
 			case "string":
-				return &String{}, nil
+				item = &String{}
 			case "array":
 				return &Array{}, nil
 			case "object":

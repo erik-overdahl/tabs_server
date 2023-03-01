@@ -121,9 +121,17 @@ type EnumValue struct {
 	Description string `json:"description,omitempty"`
 }
 
-type String struct {
+type Enum struct {
 	Property
 	Enum      []EnumValue `json:"enum,omitempty"`
+}
+
+func (_ Enum) Type() string {
+	return "string"
+}
+
+type String struct {
+	Property
 	MinLength int         `json:"minLength,omitempty"`
 	MaxLength int         `json:"maxLength,omitempty"`
 	Pattern   string      `json:"pattern,omitempty"`

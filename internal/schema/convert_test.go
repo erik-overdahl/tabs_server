@@ -8,6 +8,63 @@ import (
 	ojson "github.com/erik-overdahl/tabs_server/internal/json"
 )
 
+func makeTest(input ojson.JSON, expected []Item) func(*testing.T) {
+	return func(t *testing.T) {
+		if actual, err := Convert(input); err != nil {
+			t.Errorf("Got error; %v", err)
+		} else if !util.ValueEqual(actual, expected) {
+			b, _ := json.MarshalIndent(expected, "", " ")
+			d, _ := json.MarshalIndent(actual, "", " ")
+			t.Errorf("Expected:\n%v\nGot:\n%v", string(b), string(d))
+		}
+	}
+}
+
+func TestEnum(t *testing.T) {
+	cases := []struct{
+		Name string
+		Input ojson.JSON
+		Expected []Item
+	}{
+		{
+			Name: "Enum",
+			Input: &ojson.Object{[]*ojson.KeyValue{
+				{"id", "IsEnum"},
+				{"type", "string"},
+				{"enum", &ojson.List{[]any{
+					"foo", "bar",
+				}}},
+			}},
+			Expected: []Item{
+				&Enum{Property: Property{
+					Id: "IsEnum",
+				},
+					Enum: []EnumValue{
+						{Name: "foo"},
+						{Name: "bar"},
+					},
+				},
+			},
+		},
+		{
+			Name: "Not Enum",
+			Input: &ojson.Object{[]*ojson.KeyValue{
+				{"id", "IsNotEnum"},
+				{"type", "string"},
+			}},
+			Expected: []Item{
+				&String{Property: Property{
+					Id: "IsNotEnum",
+				},
+				},
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.Name, makeTest(c.Input, c.Expected))
+	}
+}
+
 func TestConvert(t *testing.T) {
 	cases := []struct{
 		Name string
@@ -85,15 +142,7 @@ func TestConvert(t *testing.T) {
 		},
 	}
 	for _, c := range cases {
-		t.Run(c.Name, func(t *testing.T){
-			if actual, err := Convert(c.Input); err != nil {
-				t.Errorf("Got error; %v", err)
-			} else if !util.ValueEqual(actual, c.Expected) {
-				b, _ := json.MarshalIndent(c.Expected, "", " ")
-				d, _ := json.MarshalIndent(actual, "", " ")
-				t.Errorf("Expected:\n%v\nGot:\n%v", string(b), string(d))
-			}
-		})
+		t.Run(c.Name, makeTest(c.Input, c.Expected))
 	}
 }
 
