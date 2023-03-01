@@ -1,23 +1,26 @@
-package generate
+package schema
 
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/erik-overdahl/tabs_server/internal/util"
+	ojson "github.com/erik-overdahl/tabs_server/internal/json"
 )
 
 func TestConvert(t *testing.T) {
 	cases := []struct{
 		Name string
-		Input JSON
+		Input ojson.JSON
 		Expected []SchemaItem
 	}{
 		{
 			Name: "Object should become SchemaObject",
-			Input: &ObjNode{Items: []*KeyValueNode{
+			Input: &ojson.ObjNode{Items: []*ojson.KeyValueNode{
 				{"id", "Foo"},
-				{"properties", &ObjNode{
-					Items: []*KeyValueNode{
-						{"someProp", &ObjNode{Items: []*KeyValueNode{
+				{"properties", &ojson.ObjNode{
+					Items: []*ojson.KeyValueNode{
+						{"someProp", &ojson.ObjNode{Items: []*ojson.KeyValueNode{
 								{"type", "string"},
 							}},
 						},
@@ -40,16 +43,16 @@ func TestConvert(t *testing.T) {
 		},
 		{
 			Name: "Nested Object",
-			Input: &ObjNode{Items: []*KeyValueNode{
+			Input: &ojson.ObjNode{Items: []*ojson.KeyValueNode{
 				{"id", "Foo"},
-				{"properties", &ObjNode{
-					Items: []*KeyValueNode{
+				{"properties", &ojson.ObjNode{
+					Items: []*ojson.KeyValueNode{
 						{
 							"someProp",
-							&ObjNode{Items: []*KeyValueNode{
+							&ojson.ObjNode{Items: []*ojson.KeyValueNode{
 								{"type", "object"},
-								{"properties", &ObjNode{Items: []*KeyValueNode{
-									{"nested", &ObjNode{Items: []*KeyValueNode{
+								{"properties", &ojson.ObjNode{Items: []*ojson.KeyValueNode{
+									{"nested", &ojson.ObjNode{Items: []*ojson.KeyValueNode{
 										{"type", "string"},
 									}}},
 								}}},
@@ -85,7 +88,7 @@ func TestConvert(t *testing.T) {
 		t.Run(c.Name, func(t *testing.T){
 			if actual, err := Convert(c.Input); err != nil {
 				t.Errorf("Got error; %v", err)
-			} else if !ValueEqual(actual, c.Expected) {
+			} else if !util.ValueEqual(actual, c.Expected) {
 				b, _ := json.MarshalIndent(c.Expected, "", " ")
 				d, _ := json.MarshalIndent(actual, "", " ")
 				t.Errorf("Expected:\n%v\nGot:\n%v", string(b), string(d))

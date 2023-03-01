@@ -1,14 +1,16 @@
-package generate
+package json
 
 import (
 	"encoding/json"
 	"fmt"
+
+	"github.com/erik-overdahl/tabs_server/internal/util"
 )
 
 type JSON any
 
 type KeyValueNode struct {
-	Key  string
+	Key   string
 	Value any
 }
 
@@ -26,12 +28,12 @@ func toString(node JSON) string {
 }
 
 type TokenParser struct {
-	stack 	*Stack[JSON]
+	stack   *util.Stack[JSON]
 	current JSON
 }
 
 func MakeTokenParser() *TokenParser {
-	return &TokenParser{stack: MakeStack[JSON]()}
+	return &TokenParser{stack: util.MakeStack[JSON]()}
 }
 
 // add a new object to the current object
@@ -123,6 +125,3 @@ func (this *TokenParser) Parse(tokens []token) (JSON, error) {
 	}
 	return lastClosed, nil
 }
-
-
-

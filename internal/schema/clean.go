@@ -3,42 +3,47 @@
  * - remove InstanceTypes
  */
 
-package generate
+package schema
 
-import "strings"
+import (
+	"strings"
 
-func Clean(node JSON) JSON {
+	"github.com/erik-overdahl/tabs_server/internal/util"
+	ojson "github.com/erik-overdahl/tabs_server/internal/json"
+)
+
+func Clean(node ojson.JSON) ojson.JSON {
 	switch node := node.(type) {
-	case *ListNode:
+	case *ojson.ListNode:
 		return cleanList(node)
-	case *ObjNode:
+	case *ojson.ObjNode:
 		return cleanObject(node)
-	case *KeyValueNode:
+	case *ojson.KeyValueNode:
 		return cleanProperty(node)
 	default:
 		return cleanValue(node)
 	}
 }
 
-func cleanList(list *ListNode) *ListNode {
+func cleanList(list *ojson.ListNode) *ojson.ListNode {
 	i := 0
 	for i < len(list.Items) {
 		item := list.Items[i]
 		switch item := item.(type) {
-		case *ObjNode:
+		case *ojson.ObjNode:
 			if cleanObject(item) == nil {
-				list.Items = remove(i, list.Items)
+				list.Items = util.Remove(i, list.Items)
 				continue
 			}
-		case *ListNode:
+		case *ojson.ListNode:
 			if cleanList(item) == nil {
-				list.Items = remove(i, list.Items)
+				list.Items = util.Remove(i, list.Items)
 				continue
 			}
 		default:
 			val := cleanValue(item)
 			if val == nil {
-				list.Items = remove(i, list.Items)
+				list.Items = util.Remove(i, list.Items)
 				continue
 			}
 			list.Items[i] = val
@@ -51,7 +56,7 @@ func cleanList(list *ListNode) *ListNode {
 	return list
 }
 
-func cleanObject(obj *ObjNode) *ObjNode {
+func cleanObject(obj *ojson.ObjNode) *ojson.ObjNode {
 	i := 0
 	for i < len(obj.Items) {
 		prop := obj.Items[i]
@@ -64,9 +69,36 @@ func cleanObject(obj *ObjNode) *ObjNode {
 				return nil
 			}
 		case "additionalProperties":
+			addProp, ok := prop.Value.(*ojson.ObjNode)
+			if !ok {
+				break
+			}
+			for _, p := range addProp.Items {
+				if p.Key != "$ref" {
+					continue
+				}
+				removed := false
+				switch p.Value.(string) {
+				case "UnrecognizedProperty",
+					"ImageDataOrExtensionURL",
+					"ThemeColor":
+					util.Remove(i, obj.Items)
+					removed = true
+				}
+				if removed {
+					break
+				}
+			}
+		case "$ref":
+			switch prop.Value.(string) {
+			case "UnrecognizedProperty":
+				prop.Value = "any"
+			case "PersistenBackgroundProperty":
+				prop.Value = "boolean"
+			}
 		}
 		if cleanProperty(prop) == nil {
-			obj.Items = remove(i, obj.Items)
+			obj.Items = util.Remove(i, obj.Items)
 			continue
 		}
 		i++
@@ -77,13 +109,13 @@ func cleanObject(obj *ObjNode) *ObjNode {
 	return obj
 }
 
-func cleanProperty(prop *KeyValueNode) *KeyValueNode {
+func cleanProperty(prop *ojson.KeyValueNode) *ojson.KeyValueNode {
 	switch value := prop.Value.(type) {
-	case *ListNode:
+	case *ojson.ListNode:
 		if cleanList(value) == nil {
 			return nil
 		}
-	case *ObjNode:
+	case *ojson.ObjNode:
 		if cleanObject(value) == nil {
 			return nil
 		}
