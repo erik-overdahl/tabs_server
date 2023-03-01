@@ -40,7 +40,7 @@ func (s Stack[T]) Len() int {
 	return len(s.items)
 }
 
-func remove[T any](i int, list []T) []T {
+func Remove[T any](i int, list []T) []T {
 	if !(-1 < i || i < len(list)) {
 		return list
 	}
@@ -54,7 +54,7 @@ func remove[T any](i int, list []T) []T {
 	}
 }
 
-func snakeToCamel(s string) string {
+func SnakeToCamel(s string) string {
 	res := []byte{}
 	upcase := false
 	for i := range s {
@@ -71,7 +71,7 @@ func snakeToCamel(s string) string {
 	return string(res)
 }
 
-func camelToSnake(s string) string {
+func CamelToSnake(s string) string {
 	out := []byte{}
 	for i := range s {
 		c := s[i]
@@ -84,7 +84,7 @@ func camelToSnake(s string) string {
 	return string(out)
 }
 
-func exportable(s string) string {
+func Exportable(s string) string {
 	if s[0] == '$' {
 		s = s[1:]
 	}
@@ -95,7 +95,7 @@ func exportable(s string) string {
 }
 
 // insert a newline every n characters in the string
-func linewrap(s string, lineLength int) string {
+func Linewrap(s string, lineLength int) string {
 	if len(s) < lineLength {
 		return s
 	}
@@ -114,7 +114,7 @@ func linewrap(s string, lineLength int) string {
 	return strings.Join(lines, string('\n'))
 }
 
-func mapf[T any, Y any](lst []T, f func(T) (Y, error)) ([]Y, error) {
+func Mapf[T any, Y any](lst []T, f func(T) (Y, error)) ([]Y, error) {
 	result := make([]Y, len(lst))
 	for i := range lst {
 		item, err := f(lst[i])
@@ -126,8 +126,17 @@ func mapf[T any, Y any](lst []T, f func(T) (Y, error)) ([]Y, error) {
 	return result, nil
 }
 
+type ErrUnexpectedType struct {
+	Expected any
+	Actual   any
+}
+
+func (e ErrUnexpectedType) Error() string {
+	return fmt.Sprintf("type error: expected %T, got %T", e.Expected, e.Actual)
+}
+
 // hahaha this is garbage
-func castAndCall[From any, To any](param any, f func(From) (To, error)) (To, error) {
+func CastAndCall[From any, To any](param any, f func(From) (To, error)) (To, error) {
 	if arg, ok := param.(From); !ok {
 		var t From
 		var zero To
@@ -137,11 +146,11 @@ func castAndCall[From any, To any](param any, f func(From) (To, error)) (To, err
 	}
 }
 
-func identity[T any](v T) (T, error) {
+func Identity[T any](v T) (T, error) {
 	return v, nil
 }
 
-func merge[T any](target, source T) T {
+func Merge[T any](target, source T) T {
 	vTarget := reflect.ValueOf(target).Elem()
 	vSource := reflect.ValueOf(source).Elem()
 	if vTarget == vSource {
@@ -160,7 +169,7 @@ func merge[T any](target, source T) T {
 			case reflect.Slice:
 				t.Set(reflect.AppendSlice(t, s))
 			case reflect.Pointer, reflect.Interface:
-				t.Set(reflect.ValueOf(merge(t.Interface(), s.Interface())))
+				t.Set(reflect.ValueOf(Merge(t.Interface(), s.Interface())))
 			}
 		}
 	}
