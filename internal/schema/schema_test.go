@@ -12,7 +12,7 @@ func TestConvert(t *testing.T) {
 	cases := []struct{
 		Name string
 		Input ojson.JSON
-		Expected []SchemaItem
+		Expected []Item
 	}{
 		{
 			Name: "Object should become SchemaObject",
@@ -27,14 +27,14 @@ func TestConvert(t *testing.T) {
 					}},
 				},
 			}},
-			Expected: []SchemaItem{
-				&SchemaObjectProperty{
-					SchemaProperty: SchemaProperty{
+			Expected: []Item{
+				&Object{
+					Property: Property{
 						Id: "Foo",
 					},
-					Properties: []SchemaItem{
-						&SchemaStringProperty{
-							SchemaProperty: SchemaProperty{
+					Properties: []Item{
+						&String{
+							Property: Property{
 								Name: "someProp",
 							}},
 					},
@@ -61,19 +61,19 @@ func TestConvert(t *testing.T) {
 					},
 				}},
 			}},
-			Expected: []SchemaItem{
-				&SchemaObjectProperty{
-					SchemaProperty: SchemaProperty{
+			Expected: []Item{
+				&Object{
+					Property: Property{
 						Id: "Foo",
 					},
-					Properties: []SchemaItem{
-						&SchemaObjectProperty{
-							SchemaProperty: SchemaProperty{
+					Properties: []Item{
+						&Object{
+							Property: Property{
 								Name: "someProp",
 							},
-							Properties: []SchemaItem{
-								&SchemaStringProperty{
-									SchemaProperty: SchemaProperty{
+							Properties: []Item{
+								&String{
+									Property: Property{
 										Name: "nested",
 									},
 								},
@@ -98,16 +98,16 @@ func TestConvert(t *testing.T) {
 }
 
 func TestMergeNamespaces(t *testing.T) {
-	ns1 := &SchemaNamespace{}
+	ns1 := &Namespace{}
 	ns1.Name = "foo"
 	ns1.Permissions = []string{"perm1", "perm2"}
-	ns2 := &SchemaNamespace{}
+	ns2 := &Namespace{}
 	ns2.Name = "foo"
 	ns2.Permissions = []string{"perm3"}
-	typ := &SchemaStringProperty{}
+	typ := &String{}
 	typ.Id = "String"
-	ns2.Types = []SchemaItem{typ}
-	spaces := []*SchemaNamespace{ns1, ns2}
+	ns2.Types = []Item{typ}
+	spaces := []*Namespace{ns1, ns2}
 
 	spaces = MergeNamespaces(spaces)
 

@@ -9,11 +9,6 @@ import (
 	ojson "github.com/erik-overdahl/tabs_server/internal/json"
 )
 
-type SchemaItem interface {
-	Type() string
-	Base() SchemaProperty
-}
-
 type ErrReadingKey struct {
 	Key string
 	error
@@ -23,7 +18,7 @@ func (e ErrReadingKey) Error() string {
 	return fmt.Errorf("error reading key '%s': %w", e.Key, e.error).Error()
 }
 
-func Convert(json ojson.JSON) ([]SchemaItem, error) {
+func Convert(json ojson.JSON) ([]Item, error) {
 	switch j := json.(type) {
 	case *ojson.ListNode:
 		return parseList(j, parseObject)
@@ -32,19 +27,19 @@ func Convert(json ojson.JSON) ([]SchemaItem, error) {
 		if err != nil {
 			return nil, err
 		}
-		return []SchemaItem{n}, nil
+		return []Item{n}, nil
 	case *ojson.KeyValueNode:
 		n, err := parseProperty(j)
 		if err != nil {
 			return nil, err
 		}
-		return []SchemaItem{n}, nil
+		return []Item{n}, nil
 	}
 	return nil, fmt.Errorf("cannot read object of type %T to a schema object", json)
 }
 
-func MergeNamespaces(namespaces []*SchemaNamespace) []*SchemaNamespace {
-	spaces := map[string]*SchemaNamespace{}
+func MergeNamespaces(namespaces []*Namespace) []*Namespace {
+	spaces := map[string]*Namespace{}
 	i := 0
 	for i < len(namespaces) {
 		info := namespaces[i]
@@ -60,21 +55,21 @@ func MergeNamespaces(namespaces []*SchemaNamespace) []*SchemaNamespace {
 	return namespaces
 }
 
-func determineType(json *ojson.ObjNode) (SchemaItem, error) {
-	var item SchemaItem
+func determineType(json *ojson.ObjNode) (Item, error) {
+	var item Item
 	// base := SchemaProperty{}
 	for _, kv := range json.Items {
 		switch kv.Key {
 		case "namespace":
-			return &SchemaNamespace{}, nil
+			return &Namespace{}, nil
 		case "choices":
-			return &SchemaChoicesProperty{}, nil
+			return &Choices{}, nil
 		case "$ref":
-			item = &SchemaRefProperty{}
+			item = &Ref{}
 		case "value":
-			return &SchemaValueProperty{}, nil
+			return &Value{}, nil
 		case "properties":
-			return &SchemaObjectProperty{}, nil
+			return &Object{}, nil
 		case "type":
 			typeName, ok := kv.Value.(string)
 			if !ok {
@@ -82,37 +77,37 @@ func determineType(json *ojson.ObjNode) (SchemaItem, error) {
 			}
 			switch typeName {
 			case "value":
-				return &SchemaValueProperty{}, nil
+				return &Value{}, nil
 			case "any":
-				return &SchemaAnyProperty{}, nil
+				return &Any{}, nil
 			case "integer":
-				return &SchemaIntProperty{}, nil
+				return &Int{}, nil
 			case "number":
-				return &SchemaFloatProperty{}, nil
+				return &Number{}, nil
 			case "boolean":
-				return &SchemaBoolProperty{}, nil
+				return &Bool{}, nil
 			case "null":
-				return &SchemaNullProperty{}, nil
+				return &Null{}, nil
 			case "string":
-				return &SchemaStringProperty{}, nil
+				return &String{}, nil
 			case "array":
-				return &SchemaArrayProperty{}, nil
+				return &Array{}, nil
 			case "object":
-				return &SchemaObjectProperty{}, nil
+				return &Object{}, nil
 			case "function":
-				return &SchemaFunctionProperty{}, nil
+				return &Function{}, nil
 			}
 		}
 	}
 	if item == nil {
-		return &SchemaProperty{}, nil
+		return &Property{}, nil
 	}
 	return item, nil
 }
 
 var zero reflect.Value
 
-func parseObject(json *ojson.ObjNode) (SchemaItem, error) {
+func parseObject(json *ojson.ObjNode) (Item, error) {
 	item, err := determineType(json)
 	if err != nil {
 		return nil, err
@@ -125,7 +120,7 @@ func parseObject(json *ojson.ObjNode) (SchemaItem, error) {
 	return item, nil
 }
 
-func setField(item SchemaItem, kv *ojson.KeyValueNode) error {
+func setField(item Item, kv *ojson.KeyValueNode) error {
 	itemValue := reflect.ValueOf(item).Elem()
 	fieldName := util.Exportable(util.SnakeToCamel(kv.Key))
 	if kv.Key == "namespace" {
@@ -153,12 +148,12 @@ func setField(item SchemaItem, kv *ojson.KeyValueNode) error {
 	case "additionalProperties":
 		switch value := kv.Value.(type) {
 		case bool:
-			v = &SchemaAnyProperty{}
+			v = &Any{}
 		case *ojson.ObjNode:
 			v, err = parseObject(value)
 		}
 	case "properties", "patternProperties":
-		v, err = util.CastAndCall(kv.Value, func(lst *ojson.ObjNode) ([]SchemaItem, error) {
+		v, err = util.CastAndCall(kv.Value, func(lst *ojson.ObjNode) ([]Item, error) {
 			return util.Mapf(lst.Items, parseProperty)
 		})
 	default:
@@ -175,11 +170,11 @@ func setField(item SchemaItem, kv *ojson.KeyValueNode) error {
 			}
 		case []string:
 			v, err = util.CastAndCall(kv.Value, wrap(util.Identity[string]))
-		case []SchemaItem:
+		case []Item:
 			v, err = util.CastAndCall(kv.Value, wrap(parseObject))
-		case []*SchemaFunctionProperty:
+		case []*Function:
 			v, err = util.CastAndCall(kv.Value, wrap(parseFunction))
-		case []SchemaEnumValue:
+		case []EnumValue:
 			v, err = util.CastAndCall(kv.Value, parseEnum)
 		}
 	}
@@ -187,7 +182,7 @@ func setField(item SchemaItem, kv *ojson.KeyValueNode) error {
 	return err
 }
 
-func parseProperty(json *ojson.KeyValueNode) (SchemaItem, error) {
+func parseProperty(json *ojson.KeyValueNode) (Item, error) {
 	value, err := util.CastAndCall(json.Value, parseObject)
 	if err != nil {
 		return nil, err
@@ -197,19 +192,19 @@ func parseProperty(json *ojson.KeyValueNode) (SchemaItem, error) {
 	return value, nil
 }
 
-func parseFunction(json *ojson.ObjNode) (*SchemaFunctionProperty, error) {
+func parseFunction(json *ojson.ObjNode) (*Function, error) {
 	if item, err := parseObject(json); err != nil {
 		return nil, err
-	} else if _func, ok := item.(*SchemaFunctionProperty); !ok {
+	} else if _func, ok := item.(*Function); !ok {
 		return nil, fmt.Errorf("failed to parse function: got %T", item)
 	} else {
 		return _func, nil
 	}
 }
 
-func parseEnum(lst *ojson.ListNode) ([]SchemaEnumValue, error) {
-	return parseList(lst, func(item any) (SchemaEnumValue, error) {
-		enum := SchemaEnumValue{}
+func parseEnum(lst *ojson.ListNode) ([]EnumValue, error) {
+	return parseList(lst, func(item any) (EnumValue, error) {
+		enum := EnumValue{}
 		switch item := item.(type) {
 		case string:
 			enum.Name = item
