@@ -14,28 +14,28 @@ import (
 
 func Clean(node ojson.JSON) ojson.JSON {
 	switch node := node.(type) {
-	case *ojson.ListNode:
+	case *ojson.List:
 		return cleanList(node)
-	case *ojson.ObjNode:
+	case *ojson.Object:
 		return cleanObject(node)
-	case *ojson.KeyValueNode:
+	case *ojson.KeyValue:
 		return cleanProperty(node)
 	default:
 		return cleanValue(node)
 	}
 }
 
-func cleanList(list *ojson.ListNode) *ojson.ListNode {
+func cleanList(list *ojson.List) *ojson.List {
 	i := 0
 	for i < len(list.Items) {
 		item := list.Items[i]
 		switch item := item.(type) {
-		case *ojson.ObjNode:
+		case *ojson.Object:
 			if cleanObject(item) == nil {
 				list.Items = util.Remove(i, list.Items)
 				continue
 			}
-		case *ojson.ListNode:
+		case *ojson.List:
 			if cleanList(item) == nil {
 				list.Items = util.Remove(i, list.Items)
 				continue
@@ -56,7 +56,7 @@ func cleanList(list *ojson.ListNode) *ojson.ListNode {
 	return list
 }
 
-func cleanObject(obj *ojson.ObjNode) *ojson.ObjNode {
+func cleanObject(obj *ojson.Object) *ojson.Object {
 	i := 0
 	for i < len(obj.Items) {
 		prop := obj.Items[i]
@@ -69,7 +69,7 @@ func cleanObject(obj *ojson.ObjNode) *ojson.ObjNode {
 				return nil
 			}
 		case "additionalProperties":
-			addProp, ok := prop.Value.(*ojson.ObjNode)
+			addProp, ok := prop.Value.(*ojson.Object)
 			if !ok {
 				break
 			}
@@ -109,13 +109,13 @@ func cleanObject(obj *ojson.ObjNode) *ojson.ObjNode {
 	return obj
 }
 
-func cleanProperty(prop *ojson.KeyValueNode) *ojson.KeyValueNode {
+func cleanProperty(prop *ojson.KeyValue) *ojson.KeyValue {
 	switch value := prop.Value.(type) {
-	case *ojson.ListNode:
+	case *ojson.List:
 		if cleanList(value) == nil {
 			return nil
 		}
-	case *ojson.ObjNode:
+	case *ojson.Object:
 		if cleanObject(value) == nil {
 			return nil
 		}

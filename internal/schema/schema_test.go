@@ -16,11 +16,11 @@ func TestConvert(t *testing.T) {
 	}{
 		{
 			Name: "Object should become SchemaObject",
-			Input: &ojson.ObjNode{Items: []*ojson.KeyValueNode{
+			Input: &ojson.Object{Items: []*ojson.KeyValue{
 				{"id", "Foo"},
-				{"properties", &ojson.ObjNode{
-					Items: []*ojson.KeyValueNode{
-						{"someProp", &ojson.ObjNode{Items: []*ojson.KeyValueNode{
+				{"properties", &ojson.Object{
+					Items: []*ojson.KeyValue{
+						{"someProp", &ojson.Object{Items: []*ojson.KeyValue{
 								{"type", "string"},
 							}},
 						},
@@ -43,16 +43,16 @@ func TestConvert(t *testing.T) {
 		},
 		{
 			Name: "Nested Object",
-			Input: &ojson.ObjNode{Items: []*ojson.KeyValueNode{
+			Input: &ojson.Object{Items: []*ojson.KeyValue{
 				{"id", "Foo"},
-				{"properties", &ojson.ObjNode{
-					Items: []*ojson.KeyValueNode{
+				{"properties", &ojson.Object{
+					Items: []*ojson.KeyValue{
 						{
 							"someProp",
-							&ojson.ObjNode{Items: []*ojson.KeyValueNode{
+							&ojson.Object{Items: []*ojson.KeyValue{
 								{"type", "object"},
-								{"properties", &ojson.ObjNode{Items: []*ojson.KeyValueNode{
-									{"nested", &ojson.ObjNode{Items: []*ojson.KeyValueNode{
+								{"properties", &ojson.Object{Items: []*ojson.KeyValue{
+									{"nested", &ojson.Object{Items: []*ojson.KeyValue{
 										{"type", "string"},
 									}}},
 								}}},

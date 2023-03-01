@@ -9,16 +9,16 @@ import (
 
 type JSON any
 
-type KeyValueNode struct {
+type KeyValue struct {
 	Key   string
 	Value any
 }
 
-type ObjNode struct {
-	Items []*KeyValueNode
+type Object struct {
+	Items []*KeyValue
 }
 
-type ListNode struct {
+type List struct {
 	Items []any
 }
 
@@ -41,13 +41,13 @@ func MakeTokenParser() *TokenParser {
 // add the new object to the head
 func (this *TokenParser) push(node JSON) error {
 	switch current := this.current.(type) {
-	case *ListNode:
+	case *List:
 		current.Items = append(current.Items, node)
-	case *KeyValueNode:
+	case *KeyValue:
 		current.Value = node
-	case *ObjNode:
+	case *Object:
 		switch node := node.(type) {
-		case *KeyValueNode:
+		case *KeyValue:
 			current.Items = append(current.Items, node)
 		default:
 			return fmt.Errorf("cannot add non-property to an object: trying to add %#v to %#v", node, current)
@@ -64,7 +64,7 @@ func (this *TokenParser) pop() JSON {
 	node := this.current
 	parent, _ := this.stack.Pop()
 	switch parent := parent.(type) {
-	case *KeyValueNode:
+	case *KeyValue:
 		return this.pop()
 	default:
 		this.current = parent
@@ -74,12 +74,12 @@ func (this *TokenParser) pop() JSON {
 
 func (this *TokenParser) addValue(value any) error {
 	switch current := this.current.(type) {
-	case *KeyValueNode:
+	case *KeyValue:
 		current.Value = value
 		this.pop()
-	case *ListNode:
+	case *List:
 		current.Items = append(current.Items, value)
-	case *ObjNode:
+	case *Object:
 		return fmt.Errorf("cannot add non-property to an object: trying to add %#v to %#v", value, current)
 	}
 	return nil
@@ -90,13 +90,13 @@ func (this *TokenParser) Parse(tokens []token) (JSON, error) {
 	for i := range tokens {
 		switch token := tokens[i].(type) {
 		case jsonArrOpen:
-			node := &ListNode{Items: []any{}}
+			node := &List{Items: []any{}}
 			if err := this.push(node); err != nil {
 				return nil, err
 			}
 
 		case jsonObjOpen:
-			node := &ObjNode{Items: []*KeyValueNode{}}
+			node := &Object{Items: []*KeyValue{}}
 			if err := this.push(node); err != nil {
 				return nil, err
 			}
@@ -106,8 +106,8 @@ func (this *TokenParser) Parse(tokens []token) (JSON, error) {
 
 		case jsonString:
 			switch this.current.(type) {
-			case *ObjNode:
-				node := &KeyValueNode{Key: token.value}
+			case *Object:
+				node := &KeyValue{Key: token.value}
 				if err := this.push(node); err != nil {
 					return nil, err
 				}

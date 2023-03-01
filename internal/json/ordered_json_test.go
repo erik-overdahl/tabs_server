@@ -13,24 +13,24 @@ func TestTokenParser(t *testing.T) {
 		{
 			"Empty list should be list node",
 			"[]",
-			&ListNode{Items: []any{}},
+			&List{Items: []any{}},
 		},
 		{
 			"Empty object should be obj node",
 			"{}",
-			&ObjNode{Items: []*KeyValueNode{}},
+			&Object{Items: []*KeyValue{}},
 		},
 		{
 			"Integer value",
 			`{"foo": 1}`,
-			&ObjNode{Items: []*KeyValueNode{
+			&Object{Items: []*KeyValue{
 				{"foo", 1},
 			}},
 		},
 		{
 			"Boolean values",
 			`{"foo": true, "bar": false}`,
-			&ObjNode{Items: []*KeyValueNode{
+			&Object{Items: []*KeyValue{
 				{"foo", true},
 				{"bar", false},
 			}},
@@ -38,32 +38,32 @@ func TestTokenParser(t *testing.T) {
 		{
 			"Float value",
 			`{"foo": 1.0}`,
-			&ObjNode{Items: []*KeyValueNode{
+			&Object{Items: []*KeyValue{
 				{"foo", 1.0},
 			}},
 		},
 		{
 			"Null value",
 			`{"foo": null}`,
-			&ObjNode{Items: []*KeyValueNode{
+			&Object{Items: []*KeyValue{
 				{"foo", nil},
 			}},
 		},
 		{
 			"String value",
 			`{"foo": "null"}`,
-			&ObjNode{Items: []*KeyValueNode{
+			&Object{Items: []*KeyValue{
 				{"foo", "null"},
 			}},
 		},
 		{
 			"List of objects",
 			`[{"one": [1,2,3]}, {"two": 1.0, "three": null}]`,
-			&ListNode{Items: []any{
-				&ObjNode{Items: []*KeyValueNode{
-					{"one", &ListNode{Items: []any{1, 2, 3}}}},
+			&List{Items: []any{
+				&Object{Items: []*KeyValue{
+					{"one", &List{Items: []any{1, 2, 3}}}},
 				},
-				&ObjNode{Items: []*KeyValueNode{
+				&Object{Items: []*KeyValue{
 					{"two", 1.0},
 					{"three", nil}},
 				},
@@ -90,8 +90,8 @@ func TestTokenParser(t *testing.T) {
 
 func compareJSON(n, m any) bool {
 	switch n := n.(type) {
-	case *ListNode:
-		m, ok := m.(*ListNode)
+	case *List:
+		m, ok := m.(*List)
 		if !ok || len(n.Items) != len(m.Items) {
 			return false
 		}
@@ -100,8 +100,8 @@ func compareJSON(n, m any) bool {
 				return false
 			}
 		}
-	case *ObjNode:
-		m, ok := m.(*ObjNode)
+	case *Object:
+		m, ok := m.(*Object)
 		if !ok || len(n.Items) != len(m.Items) {
 			return false
 		}
@@ -110,8 +110,8 @@ func compareJSON(n, m any) bool {
 				return false
 			}
 		}
-	case *KeyValueNode:
-		m, ok := m.(*KeyValueNode)
+	case *KeyValue:
+		m, ok := m.(*KeyValue)
 		return ok && n.Key == m.Key && compareJSON(n.Value, m.Value)
 	default:
 		return n == m

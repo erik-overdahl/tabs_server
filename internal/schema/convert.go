@@ -20,15 +20,15 @@ func (e ErrReadingKey) Error() string {
 
 func Convert(json ojson.JSON) ([]Item, error) {
 	switch j := json.(type) {
-	case *ojson.ListNode:
+	case *ojson.List:
 		return parseList(j, parseObject)
-	case *ojson.ObjNode:
+	case *ojson.Object:
 		n, err := parseObject(j)
 		if err != nil {
 			return nil, err
 		}
 		return []Item{n}, nil
-	case *ojson.KeyValueNode:
+	case *ojson.KeyValue:
 		n, err := parseProperty(j)
 		if err != nil {
 			return nil, err
@@ -55,7 +55,7 @@ func MergeNamespaces(namespaces []*Namespace) []*Namespace {
 	return namespaces
 }
 
-func determineType(json *ojson.ObjNode) (Item, error) {
+func determineType(json *ojson.Object) (Item, error) {
 	var item Item
 	// base := SchemaProperty{}
 	for _, kv := range json.Items {
@@ -107,7 +107,7 @@ func determineType(json *ojson.ObjNode) (Item, error) {
 
 var zero reflect.Value
 
-func parseObject(json *ojson.ObjNode) (Item, error) {
+func parseObject(json *ojson.Object) (Item, error) {
 	item, err := determineType(json)
 	if err != nil {
 		return nil, err
@@ -120,7 +120,7 @@ func parseObject(json *ojson.ObjNode) (Item, error) {
 	return item, nil
 }
 
-func setField(item Item, kv *ojson.KeyValueNode) error {
+func setField(item Item, kv *ojson.KeyValue) error {
 	itemValue := reflect.ValueOf(item).Elem()
 	fieldName := util.Exportable(util.SnakeToCamel(kv.Key))
 	if kv.Key == "namespace" {
@@ -149,11 +149,11 @@ func setField(item Item, kv *ojson.KeyValueNode) error {
 		switch value := kv.Value.(type) {
 		case bool:
 			v = &Any{}
-		case *ojson.ObjNode:
+		case *ojson.Object:
 			v, err = parseObject(value)
 		}
 	case "properties", "patternProperties":
-		v, err = util.CastAndCall(kv.Value, func(lst *ojson.ObjNode) ([]Item, error) {
+		v, err = util.CastAndCall(kv.Value, func(lst *ojson.Object) ([]Item, error) {
 			return util.Mapf(lst.Items, parseProperty)
 		})
 	default:
@@ -182,17 +182,17 @@ func setField(item Item, kv *ojson.KeyValueNode) error {
 	return err
 }
 
-func parseProperty(json *ojson.KeyValueNode) (Item, error) {
+func parseProperty(json *ojson.KeyValue) (Item, error) {
 	value, err := util.CastAndCall(json.Value, parseObject)
 	if err != nil {
 		return nil, err
 	}
-	kv := &ojson.KeyValueNode{Key: "Name", Value: json.Key}
+	kv := &ojson.KeyValue{Key: "Name", Value: json.Key}
 	setField(value, kv)
 	return value, nil
 }
 
-func parseFunction(json *ojson.ObjNode) (*Function, error) {
+func parseFunction(json *ojson.Object) (*Function, error) {
 	if item, err := parseObject(json); err != nil {
 		return nil, err
 	} else if _func, ok := item.(*Function); !ok {
@@ -202,13 +202,13 @@ func parseFunction(json *ojson.ObjNode) (*Function, error) {
 	}
 }
 
-func parseEnum(lst *ojson.ListNode) ([]EnumValue, error) {
+func parseEnum(lst *ojson.List) ([]EnumValue, error) {
 	return parseList(lst, func(item any) (EnumValue, error) {
 		enum := EnumValue{}
 		switch item := item.(type) {
 		case string:
 			enum.Name = item
-		case *ojson.ObjNode:
+		case *ojson.Object:
 			for _, kv := range item.Items {
 				if kv.Key == "name" {
 					enum.Name = kv.Value.(string)
@@ -223,11 +223,11 @@ func parseEnum(lst *ojson.ListNode) ([]EnumValue, error) {
 	})
 }
 
-func wrap[T any, Y any](f func(T) (Y, error)) func(*ojson.ListNode) ([]Y, error) {
-	return func(lst *ojson.ListNode) ([]Y, error) { return parseList(lst, f) }
+func wrap[T any, Y any](f func(T) (Y, error)) func(*ojson.List) ([]Y, error) {
+	return func(lst *ojson.List) ([]Y, error) { return parseList(lst, f) }
 }
 
-func parseList[ItemType any, To any](lst *ojson.ListNode, f func(ItemType) (To, error)) ([]To, error) {
+func parseList[ItemType any, To any](lst *ojson.List, f func(ItemType) (To, error)) ([]To, error) {
 	return util.Mapf(lst.Items, func(item any) (To, error) {
 		return util.CastAndCall(item, f)
 	})
