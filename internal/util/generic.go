@@ -31,6 +31,10 @@ func Mapf[T any, Y any](lst []T, f func(T) (Y, error)) ([]Y, error) {
 	return result, nil
 }
 
+func Identity[T any](v T) (T, error) {
+	return v, nil
+}
+
 type ErrUnexpectedType struct {
 	Expected any
 	Actual   any
@@ -51,10 +55,26 @@ func CastAndCall[From any, To any](param any, f func(From) (To, error)) (To, err
 	}
 }
 
-func Identity[T any](v T) (T, error) {
-	return v, nil
-}
-
+/*
+ * Given a _target_ and _source_ that are instances of the same struct,
+ * recursively:
+ *  - copy set fields on _source_ into unset fields on _target_
+ *  - append elements from slices in _sources_ to slices in _target_
+ *
+ * A contrived example
+ * ```
+ * type Foo struct {
+ *     Name string
+ *     Children []int
+ * }
+ * target := &Foo{Children: []{1, 2, 3}}
+ * source := &Foo{Name: "source", Children: []{4, 5, 6}}
+ * Merge(target, source)
+ * ```
+ * _target_ will now have Name = "source" and Children = []int{1,2,3,4,5,6}
+ *
+ * Be careful with this, I didn't make it very robust.
+ */
 func Merge[T any](target, source T) T {
 	vTarget := reflect.ValueOf(target).Elem()
 	vSource := reflect.ValueOf(source).Elem()
