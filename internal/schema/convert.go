@@ -21,15 +21,27 @@ func (e ErrReadingKey) Error() string {
 func Convert(json ojson.JSON) ([]Item, error) {
 	switch j := json.(type) {
 	case *ojson.List:
-		return parseList(j, parseObject)
+		result := make([]Item, len(j.Items))
+		for i, v := range j.Items {
+			o, ok := v.(*ojson.Object)
+			if !ok {
+				return nil, fmt.Errorf("Err converting list: %w", util.ErrUnexpectedType{o, v})
+			}
+			obj, err := parseObject(o, nil)
+			if err != nil {
+				return nil, err
+			}
+			result[i] = obj
+		}
+		return result, nil
 	case *ojson.Object:
-		n, err := parseObject(j)
+		n, err := parseObject(j, nil)
 		if err != nil {
 			return nil, err
 		}
 		return []Item{n}, nil
 	case *ojson.KeyValue:
-		n, err := parseProperty(j)
+		n, err := parseProperty(j, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -55,22 +67,26 @@ func MergeNamespaces(namespaces []*Namespace) []*Namespace {
 	return namespaces
 }
 
-func determineType(json *ojson.Object) (Item, error) {
+/*
+ * Intentionally named to make you uncomfortable
+ */
+
+func itemFactory(json *ojson.Object, parent Item) Item {
 	var item Item
 	for _, kv := range json.Items {
 		switch kv.Key {
 		case "namespace":
-			return &Namespace{}, nil
+			return &Namespace{Property: Property{parent: parent}}
 		case "choices":
-			return &Choices{}, nil
+			return &Choices{Property: Property{parent: parent}}
 		case "$ref":
-			item = &Ref{}
+			item = &Ref{Property: Property{parent: parent}}
 		case "value":
-			return &Value{}, nil
+			return &Value{Property: Property{parent: parent}}
 		case "properties":
-			return &Object{}, nil
+			return &Object{Property: Property{parent: parent}}
 		case "enum":
-			return &Enum{}, nil
+			return &Enum{Property: Property{parent: parent}}
 		case "type":
 			typeName, ok := kv.Value.(string)
 			if !ok {
@@ -78,41 +94,38 @@ func determineType(json *ojson.Object) (Item, error) {
 			}
 			switch typeName {
 			case "value":
-				return &Value{}, nil
+				return &Value{Property: Property{parent: parent}}
 			case "any":
-				return &Any{}, nil
+				return &Any{Property: Property{parent: parent}}
 			case "integer":
-				return &Int{}, nil
+				return &Int{Property: Property{parent: parent}}
 			case "number":
-				return &Number{}, nil
+				return &Number{Property: Property{parent: parent}}
 			case "boolean":
-				return &Bool{}, nil
+				return &Bool{Property: Property{parent: parent}}
 			case "null":
-				return &Null{}, nil
+				return &Null{Property: Property{parent: parent}}
 			case "string":
-				item = &String{}
+				item = &String{Property: Property{parent: parent}}
 			case "array":
-				return &Array{}, nil
+				return &Array{Property: Property{parent: parent}}
 			case "object":
-				return &Object{}, nil
+				return &Object{Property: Property{parent: parent}}
 			case "function":
-				return &Function{}, nil
+				return &Function{Property: Property{parent: parent}}
 			}
 		}
 	}
 	if item == nil {
-		return &Property{}, nil
+		return &Property{parent: parent}
 	}
-	return item, nil
+	return item
 }
 
 var zero reflect.Value
 
-func parseObject(json *ojson.Object) (Item, error) {
-	item, err := determineType(json)
-	if err != nil {
-		return nil, err
-	}
+func parseObject(json *ojson.Object, parent Item) (Item, error) {
+	item := itemFactory(json, parent)
 	for _, kv := range json.Items {
 		if err := setField(item, kv); err != nil {
 			return nil, fmt.Errorf("key '%s': %w", kv.Key, err)
@@ -126,9 +139,7 @@ func setField(item Item, kv *ojson.KeyValue) error {
 	fieldName := util.Exportable(util.SnakeToCamel(kv.Key))
 	if kv.Key == "namespace" {
 		fieldName = "Name"
-	} //else if kv.Key == "type" {
-	// 	fieldName = "Type_"
-	// }
+	}
 	field := itemValue.FieldByName(fieldName)
 	if field == zero {
 		return nil
@@ -149,14 +160,23 @@ func setField(item Item, kv *ojson.KeyValue) error {
 	case "additionalProperties":
 		switch value := kv.Value.(type) {
 		case bool:
-			v = &Any{}
+			v = &Any{Property: Property{parent: item}}
 		case *ojson.Object:
-			v, err = parseObject(value)
+			v, err = parseObject(value, item)
 		}
 	case "properties", "patternProperties":
-		v, err = util.CastAndCall(kv.Value, func(lst *ojson.Object) ([]Item, error) {
-			return util.Mapf(lst.Items, parseProperty)
-		})
+		val, ok := kv.Value.(*ojson.Object)
+		if !ok {
+			return util.ErrUnexpectedType{val, kv.Value}
+		}
+		lst := make([]Item, len(val.Items))
+		for i := range val.Items {
+			lst[i], err = parseProperty(val.Items[i], item)
+			if err != nil {
+				return err
+			}
+		}
+		v = lst
 	default:
 		switch field.Interface().(type) {
 		case string, bool, int, float64:
@@ -164,73 +184,108 @@ func setField(item Item, kv *ojson.KeyValue) error {
 		case nil:
 			_field, _ := itemValue.Type().FieldByName(fieldName)
 			switch _field.Type.Name() {
-			case "SchemaItem":
-				v, err = util.CastAndCall(kv.Value, parseObject)
+			case "Item":
+				val, ok := kv.Value.(*ojson.Object)
+				if !ok {
+					return util.ErrUnexpectedType{val, kv.Value}
+				}
+				v, err = parseObject(val, item)
 			default:
 				v = kv.Value
 			}
+		}
+		if v != nil {
+			break
+		}
+		val, ok := kv.Value.(*ojson.List)
+		if !ok {
+			return util.ErrUnexpectedType{val, kv.Value}
+		}
+		switch field.Interface().(type) {
 		case []string:
-			v, err = util.CastAndCall(kv.Value, wrap(util.Identity[string]))
+			lst := make([]string, len(val.Items))
+			for i := range val.Items {
+				if s, isStr := val.Items[i].(string); !isStr {
+					return util.ErrUnexpectedType{s, val.Items[i]}
+				} else {
+					lst[i] = s
+				}
+			}
+			v = lst
 		case []Item:
-			v, err = util.CastAndCall(kv.Value, wrap(parseObject))
+			v := make([]Item, len(val.Items))
+			for i := range val.Items {
+				o, ok := val.Items[i].(*ojson.Object)
+				if !ok {
+					return util.ErrUnexpectedType{o, val.Items[i]}
+				}
+				v[i], err = parseObject(o, item)
+				if err != nil {
+					return err
+				}
+			}
 		case []*Function:
-			v, err = util.CastAndCall(kv.Value, wrap(parseFunction))
+			lst := make([]*Function, len(val.Items))
+			for i := range val.Items {
+				o, ok := val.Items[i].(*ojson.Object)
+				if !ok {
+					return util.ErrUnexpectedType{o, val.Items[i]}
+				}
+				if out, err := parseObject(o, item); err != nil {
+					return err
+				} else if _func, ok := out.(*Function); !ok {
+					return util.ErrUnexpectedType{_func, out}
+				} else {
+					lst[i] = _func
+				}
+			}
+			v = lst
 		case []EnumValue:
-			v, err = util.CastAndCall(kv.Value, parseEnum)
+			
+			lst := make([]EnumValue, len(val.Items))
+			for i := range val.Items {
+				e, err := parseEnumValue(val.Items[i])
+				if err != nil {
+					return err
+				}
+				lst[i] = e
+			}
+			v = lst
 		}
 	}
 	field.Set(reflect.ValueOf(v))
 	return err
 }
 
-func parseProperty(json *ojson.KeyValue) (Item, error) {
-	value, err := util.CastAndCall(json.Value, parseObject)
+func parseProperty(kv *ojson.KeyValue, obj Item) (Item, error) {
+	val, ok := kv.Value.(*ojson.Object)
+	if !ok {
+		return nil, util.ErrUnexpectedType{val, kv.Value}
+	}
+	value, err := parseObject(val, obj)
 	if err != nil {
 		return nil, err
 	}
-	kv := &ojson.KeyValue{Key: "Name", Value: json.Key}
-	setField(value, kv)
+	name := &ojson.KeyValue{Key: "Name", Value: kv.Key}
+	setField(value, name)
 	return value, nil
 }
 
-func parseFunction(json *ojson.Object) (*Function, error) {
-	if item, err := parseObject(json); err != nil {
-		return nil, err
-	} else if _func, ok := item.(*Function); !ok {
-		return nil, fmt.Errorf("failed to parse function: got %T", item)
-	} else {
-		return _func, nil
-	}
-}
-
-func parseEnum(lst *ojson.List) ([]EnumValue, error) {
-	return parseList(lst, func(item any) (EnumValue, error) {
-		enum := EnumValue{}
-		switch item := item.(type) {
-		case string:
-			enum.Name = item
-		case *ojson.Object:
-			for _, kv := range item.Items {
-				if kv.Key == "name" {
-					enum.Name = kv.Value.(string)
-				} else if kv.Key == "description" {
-					enum.Description = kv.Value.(string)
-				}
+func parseEnumValue(item any) (EnumValue, error) {
+	enum := EnumValue{}
+	switch item := item.(type) {
+	case string:
+		enum.Name = item
+	case *ojson.Object:
+		for _, kv := range item.Items {
+			if kv.Key == "name" {
+				enum.Name = kv.Value.(string)
+			} else if kv.Key == "description" {
+				enum.Description = kv.Value.(string)
 			}
-		default:
-			return enum, fmt.Errorf("unexpected type: %T", item)
 		}
-		return enum, nil
-	})
+	default:
+		return enum, util.ErrUnexpectedType{&ojson.Object{}, item}
+	}
+	return enum, nil
 }
-
-func wrap[T any, Y any](f func(T) (Y, error)) func(*ojson.List) ([]Y, error) {
-	return func(lst *ojson.List) ([]Y, error) { return parseList(lst, f) }
-}
-
-func parseList[ItemType any, To any](lst *ojson.List, f func(ItemType) (To, error)) ([]To, error) {
-	return util.Mapf(lst.Items, func(item any) (To, error) {
-		return util.CastAndCall(item, f)
-	})
-}
-

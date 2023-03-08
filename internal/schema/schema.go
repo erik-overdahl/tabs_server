@@ -3,10 +3,12 @@ package schema
 type Item interface {
 	Type() string
 	Base() Property
+	Parent() Item
 }
 
 // the base type
 type Property struct {
+	parent			   Item     `json:"-"`
 	Id                 string   `json:"id,omitempty"`
 	Name               string   `json:"name,omitempty"`
 	Ref                string   `json:"ref,omitempty"`
@@ -29,6 +31,10 @@ func (_ Property) Type() string {
 
 func (this Property) Base() Property {
 	return this
+}
+
+func (this Property) Parent() Item {
+	return this.parent
 }
 
 // if there is a "choices" property

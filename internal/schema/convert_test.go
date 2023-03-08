@@ -11,7 +11,7 @@ import (
 func makeTest(input ojson.JSON, expected []Item) func(*testing.T) {
 	return func(t *testing.T) {
 		if actual, err := Convert(input); err != nil {
-			t.Errorf("Got error; %v", err)
+			t.Errorf("Test failed with ERR: %v", err)
 		} else if !util.ValueEqual(actual, expected) {
 			b, _ := json.MarshalIndent(expected, "", " ")
 			d, _ := json.MarshalIndent(actual, "", " ")
@@ -29,9 +29,9 @@ func TestEnum(t *testing.T) {
 		{
 			Name: "Enum",
 			Input: &ojson.Object{[]*ojson.KeyValue{
-				{"id", "IsEnum"},
-				{"type", "string"},
-				{"enum", &ojson.List{[]any{
+				{Key: "id", Value: "IsEnum"},
+				{Key: "type", Value: "string"},
+				{Key: "enum", Value: &ojson.List{Items: []any{
 					"foo", "bar",
 				}}},
 			}},
@@ -48,9 +48,9 @@ func TestEnum(t *testing.T) {
 		},
 		{
 			Name: "Not Enum",
-			Input: &ojson.Object{[]*ojson.KeyValue{
-				{"id", "IsNotEnum"},
-				{"type", "string"},
+			Input: &ojson.Object{Items: []*ojson.KeyValue{
+				{Key: "id", Value: "IsNotEnum"},
+				{Key: "type", Value: "string"},
 			}},
 			Expected: []Item{
 				&String{Property: Property{
