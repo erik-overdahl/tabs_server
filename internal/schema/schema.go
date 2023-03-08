@@ -8,7 +8,7 @@ type Item interface {
 
 // the base type
 type Property struct {
-	parent			   Item     `json:"-"`
+	parent             Item     `json:"-"`
 	Id                 string   `json:"id,omitempty"`
 	Name               string   `json:"name,omitempty"`
 	Ref                string   `json:"ref,omitempty"`
