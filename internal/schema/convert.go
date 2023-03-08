@@ -177,6 +177,26 @@ func setField(item Item, kv *ojson.KeyValue) error {
 			}
 		}
 		v = lst
+	case "events":
+		val, ok := kv.Value.(*ojson.List)
+		if !ok {
+			return util.ErrUnexpectedType{val, kv.Value}
+		}
+		lst := make([]*Event, len(val.Items))
+		for i := range val.Items {
+			o, ok := val.Items[i].(*ojson.Object)
+			if !ok {
+				return util.ErrUnexpectedType{o, val.Items[i]}
+			}
+			e := &Event{Property: Property{parent: item}}
+			for _, kv := range o.Items {
+				if err := setField(e, kv); err != nil {
+					return fmt.Errorf("key 'events': key '%s': %w", kv.Key, err)
+				}
+			}
+			lst[i] = e
+		}
+		v = lst
 	default:
 		switch field.Interface().(type) {
 		case string, bool, int, float64:
@@ -241,7 +261,6 @@ func setField(item Item, kv *ojson.KeyValue) error {
 			}
 			v = lst
 		case []EnumValue:
-			
 			lst := make([]EnumValue, len(val.Items))
 			for i := range val.Items {
 				e, err := parseEnumValue(val.Items[i])

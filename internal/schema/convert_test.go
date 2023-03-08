@@ -101,16 +101,16 @@ func TestConvert(t *testing.T) {
 		{
 			Name: "Nested Object",
 			Input: &ojson.Object{Items: []*ojson.KeyValue{
-				{"id", "Foo"},
-				{"properties", &ojson.Object{
+				{Key: "id", Value: "Foo"},
+				{Key: "properties", Value: &ojson.Object{
 					Items: []*ojson.KeyValue{
 						{
-							"someProp",
-							&ojson.Object{Items: []*ojson.KeyValue{
-								{"type", "object"},
-								{"properties", &ojson.Object{Items: []*ojson.KeyValue{
-									{"nested", &ojson.Object{Items: []*ojson.KeyValue{
-										{"type", "string"},
+							Key: "someProp",
+							Value: &ojson.Object{Items: []*ojson.KeyValue{
+								{Key: "type", Value: "object"},
+								{Key: "properties", Value: &ojson.Object{Items: []*ojson.KeyValue{
+									{Key: "nested", Value: &ojson.Object{Items: []*ojson.KeyValue{
+										{Key: "type", Value: "string"},
 									}}},
 								}}},
 							}},
@@ -138,6 +138,32 @@ func TestConvert(t *testing.T) {
 						},
 					},
 				},
+			},
+		},
+		{
+			Name: "Funcs and Events",
+			Input: &ojson.Object{Items: []*ojson.KeyValue{
+				{Key: "namespace", Value: "foospace"},
+				{Key: "functions", Value: &ojson.List{Items: []any{
+					&ojson.Object{Items: []*ojson.KeyValue{
+						{Key: "type", Value: "function"},
+						{Key: "name", Value: "fooFunc"},
+					}},
+				}}},
+				{Key: "events", Value: &ojson.List{Items: []any{
+					&ojson.Object{Items: []*ojson.KeyValue{
+						{Key: "type", Value: "function"},
+						{Key: "name", Value: "onFoo"},
+					}},
+				}}}},
+			},
+			Expected: []Item{&Namespace{Property: Property{Name: "foospace"},
+				Functions: []*Function{
+					&Function{Property: Property{Name: "fooFunc"}},
+				},
+				Events: []*Event{
+					&Event{Property: Property{Name: "onFoo"}},
+				}},
 			},
 		},
 	}

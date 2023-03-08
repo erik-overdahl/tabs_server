@@ -156,7 +156,7 @@ type Object struct {
 	PatternProperties    []Item      `json:"patternProperties,omitempty"`
 	IsInstanceOf         string      `json:"isInstanceOf,omitempty"`
 	Functions            []*Function `json:"functions,omitempty"`
-	Events               []*Function `json:"events,omitempty"`
+	Events               []*Event    `json:"events,omitempty"`
 	Default              any         `json:"default,omitempty"`
 }
 
@@ -167,11 +167,9 @@ func (_ Object) Type() string {
 type Function struct {
 	Property
 	Async                           bool   `json:"async,omitempty"`
-	RequireUserInput                bool   `json:"requireUserInput,omitempty"`
 	Parameters                      []Item `json:"parameters,omitempty"`
-	ExtraParameters                 []Item `json:"extraParameters,omitempty"`
+	RequireUserInput                bool   `json:"requireUserInput,omitempty"`
 	Returns                         Item   `json:"returns,omitempty"`
-	Filters                         []Item `json:"filters,omitempty"`
 	AllowAmbiguousOptionalArguments bool   `json:"allowAmbiguousOptionalArguments,omitempty"`
 	AllowCrossOriginArguments       bool   `json:"allowCrossOriginArguments,omitempty"`
 }
@@ -180,13 +178,21 @@ func (_ Function) Type() string {
 	return "function"
 }
 
+type Event struct {
+	Property
+	Parameters      []Item `json:"parameters,omitempty"`
+	ExtraParameters []Item `json:"extraParameters,omitempty"`
+	Filters         []Item `json:"filters,omitempty"`
+	Returns         Item   `json:"returns,omitempty"`
+}
+
 // a namespace will map to a file
 type Namespace struct {
 	Property
 	Properties      []Item      `json:"properties,omitempty"`
 	Types           []Item      `json:"types,omitempty"`
 	Functions       []*Function `json:"functions,omitempty"`
-	Events          []*Function `json:"events,omitempty"`
+	Events          []*Event    `json:"events,omitempty"`
 	DefaultContexts []string    `json:"defaultContexts,omitempty"`
 	NoCompile       bool        `json:"noCompile,omitempty"`
 	Import          string      `json:"import,omitempty"`
