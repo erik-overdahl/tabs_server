@@ -1,5 +1,7 @@
 package schema
 
+import "github.com/erik-overdahl/tabs_server/internal/util"
+
 type Pieces struct {
 	Structs   []*Object
 	Enums     []*Enum
@@ -38,7 +40,7 @@ func (this *Pieces) extract(item Item) {
 		for _, thing := range item.Events {
 			this.extract(thing)
 		}
-		this.Structs = append(this.Structs, item)
+		this.addStruct(item)
 	case *Enum:
 		this.Enums = append(this.Enums, item)
 	case *Function:
@@ -58,4 +60,24 @@ func (this *Pieces) extract(item Item) {
 		}
 		this.Events = append(this.Events, item)
 	}
+}
+
+/*
+ * If another struct with the same name and same properties exists, we
+ * can skip. If same name but different properties, we set the Id to be
+ * parent name + struct name for BOTH structs.
+ */
+func (this *Pieces) addStruct(s *Object) {
+	for _, other := range this.Structs {
+		sameProps := util.ValueEqual(s.Properties, other.Properties)
+		// already have this struct?
+		if s.Name == other.Name && sameProps {
+			return
+		// names equal but structs differ?
+		} else if s.Name == other.Name {
+			s.Id = s.parent.Base().Name + util.Exportable(s.Name)
+			other.Id = other.parent.Base().Name + util.Exportable(other.Name)
+		}
+	}
+	this.Structs = append(this.Structs, s)
 }
