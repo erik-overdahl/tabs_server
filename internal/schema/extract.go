@@ -1,8 +1,11 @@
 package schema
 
-import "github.com/erik-overdahl/tabs_server/internal/util"
+import (
+	"github.com/erik-overdahl/tabs_server/internal/util"
+)
 
 type Pieces struct {
+	Namespace *Namespace
 	Structs   []*Object
 	Enums     []*Enum
 	Functions []*Function
@@ -30,6 +33,7 @@ func (this *Pieces) extract(item Item) {
 		for _, thing := range item.Events {
 			this.extract(thing)
 		}
+		this.Namespace = item
 	case *Object:
 		for _, prop := range item.Properties {
 			this.extract(prop)
@@ -73,7 +77,7 @@ func (this *Pieces) addStruct(s *Object) {
 		// already have this struct?
 		if s.Name == other.Name && sameProps {
 			return
-		// names equal but structs differ?
+			// names equal but structs differ?
 		} else if s.Name == other.Name {
 			s.Id = s.parent.Base().Name + util.Exportable(s.Name)
 			other.Id = other.parent.Base().Name + util.Exportable(other.Name)

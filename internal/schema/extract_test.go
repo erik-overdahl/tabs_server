@@ -41,32 +41,33 @@ func TestExtract(t *testing.T) {
 						}},
 				},
 			},
-			Expected: &Pieces{Structs: []*Object{
-				{Property: Property{
-					Name: "objProp",
-				},
-					Properties: []Item{
-						&String{Property: Property{
-							Name: "stringProp",
-						}},
+			Expected: &Pieces{
+				Structs: []*Object{
+					{Property: Property{
+						Name: "objProp",
 					},
-				},
-				{
-					Property: Property{
-						Id: "Foo",
-					},
-					Properties: []Item{
-						&Object{Property: Property{
-							Name: "objProp",
-						},
-							Properties: []Item{
-								&String{Property: Property{
-									Name: "stringProp",
-								}},
+						Properties: []Item{
+							&String{Property: Property{
+								Name: "stringProp",
 							}},
+						},
+					},
+					{
+						Property: Property{
+							Id: "Foo",
+						},
+						Properties: []Item{
+							&Object{Property: Property{
+								Name: "objProp",
+							},
+								Properties: []Item{
+									&String{Property: Property{
+										Name: "stringProp",
+									}},
+								}},
+						},
 					},
 				},
-			},
 			},
 		},
 		{
@@ -134,6 +135,7 @@ func TestSameStructExtract(t *testing.T) {
 		},
 	}
 	expected := &Pieces{
+		Namespace: input,
 		Structs: []*Object{
 			{
 				Property: Property{Name: "details"},
@@ -174,7 +176,7 @@ func TestDifferentStructSameName(t *testing.T) {
 	f1 := &Function{Property: Property{Name: "fooFunc"}}
 	s1 := &Object{
 		Property: Property{
-			Name: "details",
+			Name:   "details",
 			parent: f1,
 		},
 		Properties: []Item{
@@ -186,7 +188,7 @@ func TestDifferentStructSameName(t *testing.T) {
 	f2 := &Function{Property: Property{Name: "barFunc"}}
 	s2 := &Object{
 		Property: Property{
-			Name: "details",
+			Name:   "details",
 			parent: f2,
 		},
 		Properties: []Item{
@@ -199,12 +201,13 @@ func TestDifferentStructSameName(t *testing.T) {
 		Functions: []*Function{f1, f2},
 	}
 	expected := &Pieces{
+		Namespace: input,
 		Structs: []*Object{
 			{
 				Property: Property{
 					parent: f1,
-					Name: "details",
-					Id:   "fooFuncDetails",
+					Name:   "details",
+					Id:     "fooFuncDetails",
 				},
 				Properties: []Item{
 					&Int{Property: Property{Name: "tabId"}},
@@ -213,8 +216,8 @@ func TestDifferentStructSameName(t *testing.T) {
 			{
 				Property: Property{
 					parent: f2,
-					Name: "details",
-					Id:   "barFuncDetails",
+					Name:   "details",
+					Id:     "barFuncDetails",
 				},
 				Properties: []Item{
 					&String{Property: Property{Name: "barName"}},
@@ -228,7 +231,7 @@ func TestDifferentStructSameName(t *testing.T) {
 					&Object{
 						Property: Property{
 							Name: "details",
-							Id: "fooFuncDetails",
+							Id:   "fooFuncDetails",
 						},
 						Properties: []Item{
 							&Int{Property: Property{Name: "tabId"}},
@@ -242,7 +245,7 @@ func TestDifferentStructSameName(t *testing.T) {
 					&Object{
 						Property: Property{
 							Name: "details",
-							Id: "barFuncDetails",
+							Id:   "barFuncDetails",
 						},
 						Properties: []Item{
 							&String{Property: Property{Name: "barName"}},

@@ -28,8 +28,12 @@ func ValueEqual(x, y any) bool {
 		for i := 0; i < typeOfX.NumField(); i++ {
 			if !typeOfX.Field(i).IsExported() {
 				continue
-			}
-			if !ValueEqual(xVal.Field(i).Interface(), yVal.Field(i).Interface()) {
+		 	} else if xVal.Field(i).IsZero() || yVal.Field(i).IsZero() {
+				if !(xVal.Field(i).IsZero() && yVal.Field(i).IsZero()) {
+					return false
+				}
+				continue
+			} else if !ValueEqual(xVal.Field(i).Interface(), yVal.Field(i).Interface()) {
 				return false
 			}
 		}
