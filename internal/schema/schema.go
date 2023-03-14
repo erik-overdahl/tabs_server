@@ -1,7 +1,9 @@
 package schema
 
+import "github.com/dave/jennifer/jen"
+
 type Item interface {
-	Type() string
+	Type() *jen.Statement
 	Base() Property
 	Parent() Item
 }
@@ -25,10 +27,6 @@ type Property struct {
 	MaxManifestVersion int      `json:"maxManifestVersion,omitempty"`
 }
 
-func (_ Property) Type() string {
-	return "property"
-}
-
 func (this Property) Base() Property {
 	return this
 }
@@ -44,32 +42,17 @@ type Choices struct {
 	Default any    `json:"default,omitempty"`
 }
 
-func (_ Choices) Type() string {
-	return "choices"
-}
 
 type Any struct {
 	Property
-}
-
-func (_ Any) Type() string {
-	return "any"
 }
 
 type Ref struct {
 	Property
 }
 
-func (_ Ref) Type() string {
-	return "ref"
-}
-
 type Null struct {
 	Property
-}
-
-func (_ Null) Type() string {
-	return "null"
 }
 
 type Value struct {
@@ -77,17 +60,9 @@ type Value struct {
 	Value any `json:"value,omitempty"`
 }
 
-func (_ Value) Type() string {
-	return "value"
-}
-
 type Bool struct {
 	Property
 	Default bool `json:"default,omitempty"`
-}
-
-func (_ Bool) Type() string {
-	return "bool"
 }
 
 type Int struct {
@@ -97,10 +72,6 @@ type Int struct {
 	Default int `json:"default,omitempty"`
 }
 
-func (_ Int) Type() string {
-	return "integer"
-}
-
 type Number struct {
 	Property
 	Minimum float64 `json:"minimum,omitempty"`
@@ -108,18 +79,10 @@ type Number struct {
 	Default float64 `json:"default,omitempty"`
 }
 
-func (_ Number) Type() string {
-	return "float64"
-}
-
 type Array struct {
 	Property
 	Items   Item `json:"items,omitempty"`
 	Default any  `json:"default,omitempty"`
-}
-
-func (_ Array) Type() string {
-	return "array"
 }
 
 type EnumValue struct {
@@ -129,24 +92,16 @@ type EnumValue struct {
 
 type Enum struct {
 	Property
-	Enum      []EnumValue `json:"enum,omitempty"`
-}
-
-func (_ Enum) Type() string {
-	return "string"
+	Enum []EnumValue `json:"enum,omitempty"`
 }
 
 type String struct {
 	Property
-	MinLength int         `json:"minLength,omitempty"`
-	MaxLength int         `json:"maxLength,omitempty"`
-	Pattern   string      `json:"pattern,omitempty"`
-	Format    string      `json:"format,omitempty"`
-	Default   string      `json:"default,omitempty"`
-}
-
-func (_ String) Type() string {
-	return "string"
+	MinLength int    `json:"minLength,omitempty"`
+	MaxLength int    `json:"maxLength,omitempty"`
+	Pattern   string `json:"pattern,omitempty"`
+	Format    string `json:"format,omitempty"`
+	Default   string `json:"default,omitempty"`
 }
 
 type Object struct {
@@ -160,10 +115,6 @@ type Object struct {
 	Default              any         `json:"default,omitempty"`
 }
 
-func (_ Object) Type() string {
-	return "object"
-}
-
 type Function struct {
 	Property
 	Async                           bool   `json:"async,omitempty"`
@@ -172,10 +123,6 @@ type Function struct {
 	Returns                         Item   `json:"returns,omitempty"`
 	AllowAmbiguousOptionalArguments bool   `json:"allowAmbiguousOptionalArguments,omitempty"`
 	AllowCrossOriginArguments       bool   `json:"allowCrossOriginArguments,omitempty"`
-}
-
-func (_ Function) Type() string {
-	return "function"
 }
 
 type Event struct {
@@ -196,8 +143,4 @@ type Namespace struct {
 	DefaultContexts []string    `json:"defaultContexts,omitempty"`
 	NoCompile       bool        `json:"noCompile,omitempty"`
 	Import          string      `json:"import,omitempty"`
-}
-
-func (_ Namespace) Type() string {
-	return "namespace"
 }
