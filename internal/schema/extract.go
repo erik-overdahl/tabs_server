@@ -63,6 +63,10 @@ func (this *Pieces) extract(item Item) {
 			this.extract(param)
 		}
 		this.Events = append(this.Events, item)
+	case *Array:
+		this.extract(item.Items)
+	case *Choices:
+		this.extract(item.Choose())
 	}
 }
 
