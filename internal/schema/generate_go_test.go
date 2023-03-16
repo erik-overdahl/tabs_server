@@ -128,3 +128,85 @@ func TestGenEnum(t *testing.T) {
 		t.Run(c.Name, c.doTest)
 	}
 }
+
+func TestGenStruct(t *testing.T) {
+	cases := []genTest{
+		{
+			Name: "Simple top level struct",
+			Input: &Object{Property: Property{Id: "Foo"},
+				Properties: []Item{
+					&String{Property: Property{Name: "bar"}},
+				},
+			},
+			Expected: []*jen.Statement{
+				jen.Type().Id("Foo").Struct(
+					jen.Id("Bar").String().Tag(map[string]string{"json":"bar"}),
+				)},
+		},
+		{
+			Name: "Struct with optional struct property",
+			Input: &Object{Property: Property{
+				Id: "Foo"},
+				Properties: []Item{
+					&Ref{Property: Property{
+						Name:"bar",
+						Ref: "Tab",
+						Optional: true}},
+				},
+			},
+			Expected: []*jen.Statement{
+				jen.Type().Id("Foo").Struct(
+					jen.Id("Bar").Op("*").Id("Tab").Tag(map[string]string{"json":"bar,omitempty"}),
+				),
+			},
+		},
+		{
+			Name: "Struct with optional non struct property",
+			Input: &Object{Property: Property{
+				Id: "Foo"},
+				Properties: []Item{
+					&String{Property: Property{
+						Name: "bar",
+						Optional: true}},
+				},
+			},
+			Expected: []*jen.Statement{
+				jen.Type().Id("Foo").Struct(
+					jen.Id("Bar").String().Tag(map[string]string{"json":"bar,omitempty"}),
+				),
+			},
+		},
+		{
+			Name: "Struct with comments",
+			Input: &Object{Property: Property{
+				Id: "Foo",
+				Description: "This is a foo"},
+			},
+			Expected: []*jen.Statement{
+				jen.Comment("This is a foo"),
+				jen.Type().Id("Foo").Struct(),
+			},
+		},
+		{
+			Name: "Struct with commented properties",
+			Input: &Object{Property: Property{
+				Id: "Foo"},
+				Properties: []Item{
+					&String{Property: Property{
+						Name: "bar",
+						Description: "The type of bar"},
+					},
+				},
+			},
+			Expected: []*jen.Statement{
+				jen.Type().Id("Foo").Struct(
+					jen.Comment("The type of bar"),
+					jen.Id("Bar").String().Tag(map[string]string{"json":"bar"}),
+				),
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.Name, c.doTest)
+	}
+}
