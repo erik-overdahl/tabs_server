@@ -8,8 +8,8 @@ import (
 )
 
 type genTest struct {
-	Name string
-	Input GoItem
+	Name     string
+	Input    GoItem
 	Expected []*jen.Statement
 }
 
@@ -41,7 +41,7 @@ func TestGenEnum(t *testing.T) {
 		{
 			Name: "Simple top level enum",
 			Input: &Enum{Property: Property{
-				Id: "WindowType",},
+				Id: "WindowType"},
 				Enum: []EnumValue{
 					{Name: "normal"},
 					{Name: "popup"},
@@ -76,7 +76,7 @@ func TestGenEnum(t *testing.T) {
 			Name: "Enum with value descriptions",
 			Input: &Enum{Property: Property{
 				Description: "The type of window.",
-				Id: "WindowType",},
+				Id:          "WindowType"},
 				Enum: []EnumValue{
 					{Name: "normal"},
 					{Name: "popup"},
@@ -94,7 +94,7 @@ func TestGenEnum(t *testing.T) {
 	}
 	{
 		e := &Enum{Property: Property{
-			Name: "status",},
+			Name: "status"},
 			Enum: []EnumValue{
 				{Name: "unkown"},
 				{Name: "up"},
@@ -108,21 +108,21 @@ func TestGenEnum(t *testing.T) {
 		e.parent = obj
 
 		cases = append(cases,
-		genTest{
-			Name: "Embedded enum",
-			Input: e,
-			Expected: []*jen.Statement{
-				jen.Type().Id("NetworkLinkInfoStatus").String(),
-				jen.Const().Defs(
-					jen.Id("NetworkLinkInfoStatus_UNKNOWN").Id("NetworkLinkInfoStatus").
-						Op("=").Lit("unknown"),
-					jen.Id("NetworkLinkInfoStatus_UP").Id("NetworkLinkInfoStatus").
-						Op("=").Lit("up"),
-					jen.Id("NetworkLinkInfoStatus_DOWN").Id("NetworkLinkInfoStatus").
-						Op("=").Lit("down"),
-				),
-			},
-		})
+			genTest{
+				Name:  "Embedded enum",
+				Input: e,
+				Expected: []*jen.Statement{
+					jen.Type().Id("NetworkLinkInfoStatus").String(),
+					jen.Const().Defs(
+						jen.Id("NetworkLinkInfoStatus_UNKNOWN").Id("NetworkLinkInfoStatus").
+							Op("=").Lit("unknown"),
+						jen.Id("NetworkLinkInfoStatus_UP").Id("NetworkLinkInfoStatus").
+							Op("=").Lit("up"),
+						jen.Id("NetworkLinkInfoStatus_DOWN").Id("NetworkLinkInfoStatus").
+							Op("=").Lit("down"),
+					),
+				},
+			})
 	}
 	for _, c := range cases {
 		t.Run(c.Name, c.doTest)
@@ -140,7 +140,7 @@ func TestGenStruct(t *testing.T) {
 			},
 			Expected: []*jen.Statement{
 				jen.Type().Id("Foo").Struct(
-					jen.Id("Bar").String().Tag(map[string]string{"json":"bar"}),
+					jen.Id("Bar").String().Tag(map[string]string{"json": "bar"}),
 				)},
 		},
 		{
@@ -149,14 +149,14 @@ func TestGenStruct(t *testing.T) {
 				Id: "Foo"},
 				Properties: []Item{
 					&Ref{Property: Property{
-						Name:"bar",
-						Ref: "Tab",
+						Name:     "bar",
+						Ref:      "Tab",
 						Optional: true}},
 				},
 			},
 			Expected: []*jen.Statement{
 				jen.Type().Id("Foo").Struct(
-					jen.Id("Bar").Op("*").Id("Tab").Tag(map[string]string{"json":"bar,omitempty"}),
+					jen.Id("Bar").Op("*").Id("Tab").Tag(map[string]string{"json": "bar,omitempty"}),
 				),
 			},
 		},
@@ -166,20 +166,20 @@ func TestGenStruct(t *testing.T) {
 				Id: "Foo"},
 				Properties: []Item{
 					&String{Property: Property{
-						Name: "bar",
+						Name:     "bar",
 						Optional: true}},
 				},
 			},
 			Expected: []*jen.Statement{
 				jen.Type().Id("Foo").Struct(
-					jen.Id("Bar").String().Tag(map[string]string{"json":"bar,omitempty"}),
+					jen.Id("Bar").String().Tag(map[string]string{"json": "bar,omitempty"}),
 				),
 			},
 		},
 		{
 			Name: "Struct with comments",
 			Input: &Object{Property: Property{
-				Id: "Foo",
+				Id:          "Foo",
 				Description: "This is a foo"},
 			},
 			Expected: []*jen.Statement{
@@ -193,7 +193,7 @@ func TestGenStruct(t *testing.T) {
 				Id: "Foo"},
 				Properties: []Item{
 					&String{Property: Property{
-						Name: "bar",
+						Name:        "bar",
 						Description: "The type of bar"},
 					},
 				},
@@ -201,7 +201,7 @@ func TestGenStruct(t *testing.T) {
 			Expected: []*jen.Statement{
 				jen.Type().Id("Foo").Struct(
 					jen.Comment("The type of bar"),
-					jen.Id("Bar").String().Tag(map[string]string{"json":"bar"}),
+					jen.Id("Bar").String().Tag(map[string]string{"json": "bar"}),
 				),
 			},
 		},
@@ -228,14 +228,14 @@ func TestGenFunc(t *testing.T) {
 								Call(jen.Lit("unregister"), jen.Nil()),
 							jen.Err().Op("!=").Nil(),
 						).Block(jen.Return(jen.Err())),
-						jen.Return(jen.Nil()),
+						jen.Return(),
 					),
 			},
 		},
 		{
 			Name: "Func with description",
 			Input: Function{Property: Property{
-				Name: "foo",
+				Name:        "foo",
 				Description: "Does a foo.",
 			}},
 			Expected: []*jen.Statement{
@@ -249,7 +249,113 @@ func TestGenFunc(t *testing.T) {
 								Call(jen.Lit("foo"), jen.Nil()),
 							jen.Err().Op("!=").Nil(),
 						).Block(jen.Return(jen.Err())),
-						jen.Return(jen.Nil()),
+						jen.Return(),
+					),
+			},
+		},
+		{
+			Name: "Func that returns",
+			Input: Function{Property: Property{
+				Name: "foo"},
+				Returns: &String{},
+			},
+			Expected: []*jen.Statement{
+				jen.Func().Params(jen.Id("client").Op("*").Id("Client")).
+					Id("Foo").Params().
+					Params(jen.Id("result").String(), jen.Err().Error()).
+					Block(
+						jen.If(
+							jen.List(jen.Id("response"), jen.Err()).Op(":=").
+								Id("client").Dot("gateway").Dot("Request").
+								Call(jen.Lit("foo"), jen.Nil()),
+							jen.Err().Op("!=").Nil(),
+						).Block(
+							jen.Return(jen.Id("result"), jen.Err()),
+						).Else().If(
+							jen.Err().Op(":=").Qual("json", "Unmarshal").
+								Call(
+									jen.Id("response").Dot("Data"),
+									jen.Op("&").Id("result"),
+								),
+							jen.Err().Op("!=").Nil(),
+						).Block(
+							jen.Return(jen.Id("result"), jen.Err()),
+						),
+						jen.Return(),
+					),
+			},
+		},
+		{
+			Name: "Func with param",
+			Input: Function{Property: Property{
+				Name: "foo"},
+				Parameters: []Item{
+					&String{Property: Property{Name: "name"}},
+				},
+			},
+			Expected: []*jen.Statement{
+				jen.Func().Params(jen.Id("client").Op("*").Id("Client")).
+					Id("Foo").Params(
+					jen.Id("name").String(),
+				).Params(
+					jen.Err().Error(),
+				).Block(
+					jen.If(
+						jen.List(jen.Id("_"), jen.Err()).Op(":=").
+							Id("client").Dot("gateway").Dot("Request").
+							Call(
+								jen.Lit("foo"),
+								jen.Struct(
+									jen.Id("Name").String().Tag(map[string]string{"json": "name"}),
+								).Values(jen.Dict{
+									jen.Id("Name"): jen.Id("name"),
+								}),
+							),
+						jen.Err().Op("!=").Nil(),
+					).Block(
+						jen.Return(jen.Err()),
+					),
+					jen.Return(),
+				),
+			},
+		},
+		{
+			Name: "Func with callback returns callback params",
+			Input: Function{Property: Property{
+				Name: "foo"},
+				Parameters: []Item{
+					&Function{Property: Property{
+						Name: "callback"},
+						Parameters: []Item{
+							&String{Property: Property{
+								Name: "result"}},
+						},
+					},
+				},
+			},
+			Expected: []*jen.Statement{
+				jen.Func().Params(jen.Id("client").Op("*").Id("Client")).
+					Id("Foo").Params().
+					Params(jen.Id("result").String(), jen.Err().Error()).
+					Block(
+						jen.If(
+							jen.List(jen.Id("response"), jen.Err()).Op(":=").
+								Id("client").Dot("gateway").Dot("Request").
+								Call(jen.Lit("foo"), jen.Nil()),
+							jen.Err().Op("!=").Nil(),
+						).Block(
+							jen.Return(jen.Lit(""), jen.Err()),
+						).Else().If(
+							jen.Err().Op(":=").Qual("json", "Unmarshal").
+								Call(
+									jen.Id("response").Dot("Data"),
+									jen.Op("&").Id("result"),
+								),
+							jen.Err().Op("!=").Nil(),
+						).Block(
+							jen.Return(jen.Lit(""), jen.Err()),
+						),
+						jen.Return(),
 					),
 			},
 		},

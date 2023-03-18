@@ -77,13 +77,56 @@ func (this Function) ToGo() []*jen.Statement {
 		pieces = append(pieces, jen.Comment(util.Linewrap(this.Description, 80)))
 	}
 
-	params := []jen.Code{}
+	paramItems := []Item{}
 	for _, param := range this.Parameters {
-		param := jen.Id(param.Base().Name).Add(param.Type())
-		params = append(params, param)
+		if param.Base().Name == "callback" || param.Base().Name == "responseCallback" {
+			continue
+		}
+		paramItems = append(paramItems, param)
 	}
-	returns := []jen.Code{jen.Err().Error()}
+
+	params := []jen.Code{}
 	requestData := jen.Nil()
+	props := []jen.Code{}
+	values := jen.Dict{}
+	for _, p := range paramItems {
+		param := jen.Id(p.Base().Name).Add(p.Type())
+		params = append(params, param)
+
+		values[jen.Id(util.Exportable(p.Base().Name))] = jen.Id(p.Base().Name)
+
+		tag := p.Base().Name
+		if p.Base().Optional {
+			tag += ",omitempty"
+		}
+		prop := jen.Id(util.Exportable(p.Base().Name)).Add(p.Type()).
+			Tag(map[string]string{"json": tag})
+		props = append(props, prop)
+	}
+
+	if 0 < len(paramItems) {
+		requestData = jen.Struct(props...).Values(values)
+	}
+
+	returns := []jen.Code{jen.Err().Error()}
+	errReturn := []jen.Code{jen.Err()}
+	responseVar := "_"
+	var unmarshal *jen.Statement
+
+	if this.Returns != nil {
+		returns = []jen.Code{jen.Id("result").Add(this.Returns.Type()), jen.Err().Error()}
+		errReturn = []jen.Code{jen.Id("result"), jen.Err()}
+		responseVar = "response"
+		unmarshal = jen.Else().If(
+			jen.Err().Op(":=").Qual("json", "Unmarshal").Call(
+				jen.Id(responseVar).Dot("Data"),
+				jen.Op("&").Id("result"),
+			),
+			jen.Err().Op("!=").Nil(),
+		).Block(
+			jen.Return(errReturn...),
+		)
+	}
 
 	def := jen.Func().Params(jen.Id("client").Op("*").Id("Client")).
 		Id(util.Exportable(this.Name)).
@@ -91,12 +134,14 @@ func (this Function) ToGo() []*jen.Statement {
 		Params(returns...).
 		Block(
 			jen.If(
-				jen.List(jen.Id("_"), jen.Err()).Op(":=").
+				jen.List(jen.Id(responseVar), jen.Err()).Op(":=").
 					Id("client").Dot("gateway").Dot("Request").
 					Call(jen.Lit(this.Name), requestData),
 				jen.Err().Op("!=").Nil(),
-			).Block(jen.Return(jen.Err())),
-			jen.Return(jen.Nil()),
+			).Block(
+				jen.Return(errReturn...),
+			).Add(unmarshal),
+			jen.Return(),
 		)
 	pieces = append(pieces, def)
 	return pieces
