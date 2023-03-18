@@ -65,11 +65,15 @@ func (this Value) Type() *jen.Statement {
 }
 
 func (this Ref) Type() *jen.Statement {
+	typ :=  jen.Id(this.Ref)
 	if strings.Contains(this.Ref, ".") {
 		pieces := strings.Split(this.Ref, ".")
-		return jen.Qual(pieces[0], pieces[1])
+		typ = jen.Qual(pieces[0], pieces[1])
 	}
-	return jen.Id(this.Ref)
+	if this.Optional {
+		return jen.Op("*").Add(typ)
+	}
+	return typ
 }
 
 func (this Array) Type() *jen.Statement {
@@ -79,6 +83,9 @@ func (this Array) Type() *jen.Statement {
 func (this Object) Type() *jen.Statement {
 	// ugh
 	if 0 < len(this.Properties) {
+		if this.Optional {
+			return jen.Op("*").Add(this.Property.Type())
+		}
 		return this.Property.Type()
 	} else if this.AdditionalProperties != nil {
 		return jen.Map(jen.String()).Add(this.AdditionalProperties.Type())
@@ -86,6 +93,9 @@ func (this Object) Type() *jen.Statement {
 		return jen.Map(jen.String()).Add(this.PatternProperties[0].Type())
 	} else if 1 < len(this.PatternProperties) {
 		return jen.Map(jen.String()).Any()
+	}
+	if this.Optional {
+		return jen.Op("*").Add(this.Property.Type())
 	}
 	return this.Property.Type()
 }

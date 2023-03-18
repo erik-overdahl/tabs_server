@@ -95,6 +95,15 @@ func TestRefType(t *testing.T) {
  			Input: &Ref{Property: Property{Name: "foo", Ref: "other.Bar"}},
  			Expected: jen.Qual("other","Bar"),
 		},
+		{
+			Name: "Optional ref is a pointer",
+ 			Input: &Ref{Property: Property{
+				Name: "foo",
+				Ref: "Bar",
+				Optional: true},
+			},
+			Expected: jen.Op("*").Id("Bar"),
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.Name, c.doTest)
@@ -162,6 +171,22 @@ func TestObjectType(t *testing.T) {
 				},
 			},
 			Expected: jen.Map(jen.String()).Any(),
+		},
+		{
+			Name: "Optional struct is a pointer",
+			Input: &Object{Property: Property{
+				Id: "Details",
+				Optional: true}},
+			Expected: jen.Op("*").Id("Details"),
+		},
+		{
+			Name: "Optional additional properties is not pointer",
+			Input: &Object{Property: Property{
+				Name: "details",
+				Optional: true},
+				AdditionalProperties: &String{},
+			},
+			Expected: jen.Map(jen.String()).String(),
 		},
 	}
 	for _, c := range cases {
