@@ -344,7 +344,7 @@ func TestGenFunc(t *testing.T) {
 								Call(jen.Lit("foo"), jen.Nil()),
 							jen.Err().Op("!=").Nil(),
 						).Block(
-							jen.Return(jen.Lit(""), jen.Err()),
+							jen.Return(jen.Id("result"), jen.Err()),
 						).Else().If(
 							jen.Err().Op(":=").Qual("json", "Unmarshal").
 								Call(
@@ -353,7 +353,7 @@ func TestGenFunc(t *testing.T) {
 								),
 							jen.Err().Op("!=").Nil(),
 						).Block(
-							jen.Return(jen.Lit(""), jen.Err()),
+							jen.Return(jen.Id("result"), jen.Err()),
 						),
 						jen.Return(),
 					),

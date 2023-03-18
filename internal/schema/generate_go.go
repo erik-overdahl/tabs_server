@@ -77,9 +77,11 @@ func (this Function) ToGo() []*jen.Statement {
 		pieces = append(pieces, jen.Comment(util.Linewrap(this.Description, 80)))
 	}
 
+	var callback Item
 	paramItems := []Item{}
 	for _, param := range this.Parameters {
 		if param.Base().Name == "callback" || param.Base().Name == "responseCallback" {
+			callback = param
 			continue
 		}
 		paramItems = append(paramItems, param)
@@ -108,13 +110,19 @@ func (this Function) ToGo() []*jen.Statement {
 		requestData = jen.Struct(props...).Values(values)
 	}
 
+	returned := this.Returns
+	if callback != nil {
+		callback, _ := callback.(*Function)
+		returned = callback.Parameters[0]
+	}
+
 	returns := []jen.Code{jen.Err().Error()}
 	errReturn := []jen.Code{jen.Err()}
 	responseVar := "_"
 	var unmarshal *jen.Statement
 
-	if this.Returns != nil {
-		returns = []jen.Code{jen.Id("result").Add(this.Returns.Type()), jen.Err().Error()}
+	if returned != nil {
+		returns = []jen.Code{jen.Id("result").Add(returned.Type()), jen.Err().Error()}
 		errReturn = []jen.Code{jen.Id("result"), jen.Err()}
 		responseVar = "response"
 		unmarshal = jen.Else().If(
@@ -145,4 +153,11 @@ func (this Function) ToGo() []*jen.Statement {
 		)
 	pieces = append(pieces, def)
 	return pieces
+}
+
+func paramId(name string) string {
+	if jen.IsReservedWord(name) {
+		return "_" + name
+	}
+	return name
 }
