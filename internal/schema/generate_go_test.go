@@ -365,6 +365,44 @@ func TestGenFunc(t *testing.T) {
 					),
 			},
 		},
+		{
+			Name: "Func with reserved param name",
+			Input: Function{Property: Property{
+				parent: ns,
+				Name: "foo"},
+				Parameters: []Item{
+					&Array{Property: Property{
+						Name: "range"},
+						Items: &Int{},
+					},
+				},
+			},
+			Expected: []*jen.Statement{
+				jen.Func().Params(jen.Id("client").Op("*").Id("Client")).
+					Id("Foo").Params(
+					jen.Id("_range").Index().Int(),
+				).Params(
+					jen.Err().Error(),
+				).Block(
+					jen.If(
+						jen.List(jen.Id("_"), jen.Err()).Op(":=").
+							Id("client").Dot("gateway").Dot("Request").
+							Call(
+								jen.Lit("foospace.foo"),
+								jen.Struct(
+									jen.Id("Range").Index().Int().Tag(map[string]string{"json": "range"}),
+								).Values(jen.Dict{
+									jen.Id("Range"): jen.Id("_range"),
+								}),
+							),
+						jen.Err().Op("!=").Nil(),
+					).Block(
+						jen.Return(jen.Err()),
+					),
+					jen.Return(),
+				),
+			},
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.Name, c.doTest)

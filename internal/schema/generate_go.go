@@ -98,16 +98,18 @@ func (this Function) ToGo() []*jen.Statement {
 	props := []jen.Code{}
 	values := jen.Dict{}
 	for _, p := range paramItems {
-		param := jen.Id(p.Base().Name).Add(p.Type())
+		paramName := paramId(p.Base().Name)
+		param := jen.Id(paramName).Add(p.Type())
 		params = append(params, param)
 
-		values[jen.Id(util.Exportable(p.Base().Name))] = jen.Id(p.Base().Name)
+		propName := util.Exportable(p.Base().Name)
+		values[jen.Id(propName)] = jen.Id(paramName)
 
 		tag := p.Base().Name
 		if p.Base().Optional {
 			tag += ",omitempty"
 		}
-		prop := jen.Id(util.Exportable(p.Base().Name)).Add(p.Type()).
+		prop := jen.Id(propName).Add(p.Type()).
 			Tag(map[string]string{"json": tag})
 		props = append(props, prop)
 	}
