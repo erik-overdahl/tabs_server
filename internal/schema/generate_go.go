@@ -52,10 +52,6 @@ func (this Object) ToGo() []*jen.Statement {
 		code := jen.Id(util.Exportable(info.Name))
 		tag := info.Name
 		if info.Optional {
-			switch prop.(type) {
-			case *Object, *Ref:
-				code.Op("*")
-			}
 			tag += ",omitempty"
 		}
 		code.Add(prop.Type()).Tag(map[string]string{"json":tag})
