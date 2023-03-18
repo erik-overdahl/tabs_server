@@ -74,11 +74,6 @@ func (this Function) ToGo() []*jen.Statement {
 	}
 	namespace := ns.Name
 
-	pieces := []*jen.Statement{}
-	if this.Description != "" {
-		pieces = append(pieces, jen.Comment(util.Linewrap(this.Description, 80)))
-	}
-
 	var callback Item
 	paramItems := []Item{}
 	for _, param := range this.Parameters {
@@ -93,6 +88,7 @@ func (this Function) ToGo() []*jen.Statement {
 	requestData := jen.Nil()
 	props := []jen.Code{}
 	values := jen.Dict{}
+	paramComments := []string{"PARAMS:"}
 	for _, p := range paramItems {
 		paramName := paramId(p.Base().Name)
 		param := jen.Id(paramName).Add(p.Type())
@@ -108,6 +104,11 @@ func (this Function) ToGo() []*jen.Statement {
 		prop := jen.Id(propName).Add(p.Type()).
 			Tag(map[string]string{"json": tag})
 		props = append(props, prop)
+
+		if 0 < len(p.Base().Description) {
+			c := util.Linewrap(paramName + ": " + p.Base().Description, 80)
+			paramComments = append(paramComments, c)
+		}
 	}
 
 	if 0 < len(paramItems) {
@@ -140,6 +141,24 @@ func (this Function) ToGo() []*jen.Statement {
 		)
 	}
 
+	var comments []string
+	if this.Description != "" {
+		comments = append(comments, util.Linewrap(this.Description, 80))
+	}
+	if 1 < len(paramComments) {
+		comments = append(comments, "")
+		comments = append(comments, paramComments...)
+	}
+	if returned != nil && 0 < len(returned.Base().Description) {
+		comments = append(comments, "", "RETURNS:", util.Linewrap(returned.Base().Description, 80))
+	}
+
+	var comment *jen.Statement
+	if 0 < len(comments) {
+		comment = jen.Comment(strings.Join(comments, "\n"))
+	}
+
+	pieces := []*jen.Statement{comment}
 	def := jen.Func().Params(jen.Id("client").Op("*").Id("Client")).
 		Id(util.Exportable(this.Name)).
 		Params(params...).

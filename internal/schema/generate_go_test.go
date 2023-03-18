@@ -20,7 +20,19 @@ func (this genTest) doTest(t *testing.T) {
 	}
 	expected, _ := this.genTestString(this.Expected...)
 	if actual != expected {
-		t.Errorf("Expected: %s\n Got: %s", expected, actual)
+		aLines, eLines := strings.Split(actual, "\n"), strings.Split(expected, "\n")
+		if len(aLines) != len(eLines) {
+			t.Errorf("Expected:\n%s\n Got:\n%s", expected, actual)
+		}
+		for i, line := range eLines {
+			aLine := aLines[i]
+			for j := range line {
+				if len(aLine) <= j || aLine[j] != line[j] {
+					t.Errorf("'%c' != '%c'\nExpected:\n%s\nGot:\n%s", line[j], aLine[j], line, aLine)
+					return
+				}
+			}
+		}
 	}
 }
 
@@ -369,7 +381,7 @@ func TestGenFunc(t *testing.T) {
 			Name: "Func with reserved param name",
 			Input: Function{Property: Property{
 				parent: ns,
-				Name: "foo"},
+				Name:   "foo"},
 				Parameters: []Item{
 					&Array{Property: Property{
 						Name: "range"},
@@ -398,6 +410,63 @@ func TestGenFunc(t *testing.T) {
 						jen.Err().Op("!=").Nil(),
 					).Block(
 						jen.Return(jen.Err()),
+					),
+					jen.Return(),
+				),
+			},
+		},
+		{
+			Name: "Func with documented params and returns",
+			Input: Function{Property: Property{
+				parent:      ns,
+				Name:        "foo",
+				Description: "Get all the foos"},
+				Parameters: []Item{
+					&Array{Property: Property{
+						Name:        "range",
+						Description: "The range of foo ids"},
+						Items: &Int{},
+					},
+				},
+				Returns: &Array{Property: Property{
+					Description: "The list of foos"},
+					Items: &Ref{Property: Property{
+						Ref: "Foo",
+					}},
+				},
+			},
+			Expected: []*jen.Statement{
+				jen.Comment("Get all the foos\n\nPARAMS:\n_range: The range of foo ids\n\nRETURNS:\nThe list of foos"),
+				jen.Func().Params(jen.Id("client").Op("*").Id("Client")).
+					Id("Foo").Params(
+					jen.Id("_range").Index().Int(),
+				).Params(
+					jen.Id("result").Index().Id("Foo"),
+					jen.Err().Error(),
+				).Block(
+					jen.If(
+						jen.List(jen.Id("response"), jen.Err()).Op(":=").
+							Id("client").Dot("gateway").Dot("Request").
+							Call(
+								jen.Lit("foospace.foo"),
+								jen.Struct(
+									jen.Id("Range").Index().Int().Tag(map[string]string{"json": "range"}),
+								).Values(jen.Dict{
+									jen.Id("Range"): jen.Id("_range"),
+								}),
+							),
+						jen.Err().Op("!=").Nil(),
+					).Block(
+						jen.Return(jen.Id("result"), jen.Err()),
+					).Else().If(
+						jen.Err().Op(":=").Qual("json", "Unmarshal").
+							Call(
+								jen.Id("response").Dot("Data"),
+								jen.Op("&").Id("result"),
+							),
+						jen.Err().Op("!=").Nil(),
+					).Block(
+						jen.Return(jen.Id("result"), jen.Err()),
 					),
 					jen.Return(),
 				),
