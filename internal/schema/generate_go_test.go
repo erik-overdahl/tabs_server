@@ -210,3 +210,51 @@ func TestGenStruct(t *testing.T) {
 		t.Run(c.Name, c.doTest)
 	}
 }
+
+func TestGenFunc(t *testing.T) {
+	cases := []genTest{
+		{
+			Name: "Func with no params or returns",
+			Input: &Function{Property: Property{
+				Name: "unregister"},
+			},
+			Expected: []*jen.Statement{
+				jen.Func().Params(jen.Id("client").Op("*").Id("Client")).
+					Id("Unregister").Params().Params(jen.Err().Error()).
+					Block(
+						jen.If(
+							jen.List(jen.Id("_"), jen.Err()).Op(":=").
+								Id("client").Dot("gateway").Dot("Request").
+								Call(jen.Lit("unregister"), jen.Nil()),
+							jen.Err().Op("!=").Nil(),
+						).Block(jen.Return(jen.Err())),
+						jen.Return(jen.Nil()),
+					),
+			},
+		},
+		{
+			Name: "Func with description",
+			Input: Function{Property: Property{
+				Name: "foo",
+				Description: "Does a foo.",
+			}},
+			Expected: []*jen.Statement{
+				jen.Comment("Does a foo."),
+				jen.Func().Params(jen.Id("client").Op("*").Id("Client")).
+					Id("Foo").Params().Params(jen.Err().Error()).
+					Block(
+						jen.If(
+							jen.List(jen.Id("_"), jen.Err()).Op(":=").
+								Id("client").Dot("gateway").Dot("Request").
+								Call(jen.Lit("foo"), jen.Nil()),
+							jen.Err().Op("!=").Nil(),
+						).Block(jen.Return(jen.Err())),
+						jen.Return(jen.Nil()),
+					),
+			},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.Name, c.doTest)
+	}
+}

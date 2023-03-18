@@ -70,3 +70,34 @@ func (this Object) ToGo() []*jen.Statement {
 	pieces = append(pieces, def)
 	return pieces
 }
+
+func (this Function) ToGo() []*jen.Statement {
+	pieces := []*jen.Statement{}
+	if this.Description != "" {
+		pieces = append(pieces, jen.Comment(util.Linewrap(this.Description, 80)))
+	}
+
+	params := []jen.Code{}
+	for _, param := range this.Parameters {
+		param := jen.Id(param.Base().Name).Add(param.Type())
+		params = append(params, param)
+	}
+	returns := []jen.Code{jen.Err().Error()}
+	requestData := jen.Nil()
+
+	def := jen.Func().Params(jen.Id("client").Op("*").Id("Client")).
+		Id(util.Exportable(this.Name)).
+		Params(params...).
+		Params(returns...).
+		Block(
+			jen.If(
+				jen.List(jen.Id("_"), jen.Err()).Op(":=").
+					Id("client").Dot("gateway").Dot("Request").
+					Call(jen.Lit(this.Name), requestData),
+				jen.Err().Op("!=").Nil(),
+			).Block(jen.Return(jen.Err())),
+			jen.Return(jen.Nil()),
+		)
+	pieces = append(pieces, def)
+	return pieces
+}
