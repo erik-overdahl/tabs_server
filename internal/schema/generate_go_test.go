@@ -212,11 +212,13 @@ func TestGenStruct(t *testing.T) {
 }
 
 func TestGenFunc(t *testing.T) {
+	ns := &Namespace{Property: Property{Name: "foospace"}}
 	cases := []genTest{
 		{
 			Name: "Func with no params or returns",
 			Input: &Function{Property: Property{
-				Name: "unregister"},
+				parent: ns,
+				Name:   "unregister"},
 			},
 			Expected: []*jen.Statement{
 				jen.Func().Params(jen.Id("client").Op("*").Id("Client")).
@@ -225,7 +227,7 @@ func TestGenFunc(t *testing.T) {
 						jen.If(
 							jen.List(jen.Id("_"), jen.Err()).Op(":=").
 								Id("client").Dot("gateway").Dot("Request").
-								Call(jen.Lit("unregister"), jen.Nil()),
+								Call(jen.Lit("foospace.unregister"), jen.Nil()),
 							jen.Err().Op("!=").Nil(),
 						).Block(jen.Return(jen.Err())),
 						jen.Return(),
@@ -235,6 +237,7 @@ func TestGenFunc(t *testing.T) {
 		{
 			Name: "Func with description",
 			Input: Function{Property: Property{
+				parent:      ns,
 				Name:        "foo",
 				Description: "Does a foo.",
 			}},
@@ -246,7 +249,7 @@ func TestGenFunc(t *testing.T) {
 						jen.If(
 							jen.List(jen.Id("_"), jen.Err()).Op(":=").
 								Id("client").Dot("gateway").Dot("Request").
-								Call(jen.Lit("foo"), jen.Nil()),
+								Call(jen.Lit("foospace.foo"), jen.Nil()),
 							jen.Err().Op("!=").Nil(),
 						).Block(jen.Return(jen.Err())),
 						jen.Return(),
@@ -256,7 +259,8 @@ func TestGenFunc(t *testing.T) {
 		{
 			Name: "Func that returns",
 			Input: Function{Property: Property{
-				Name: "foo"},
+				parent: ns,
+				Name:   "foo"},
 				Returns: &String{},
 			},
 			Expected: []*jen.Statement{
@@ -267,7 +271,7 @@ func TestGenFunc(t *testing.T) {
 						jen.If(
 							jen.List(jen.Id("response"), jen.Err()).Op(":=").
 								Id("client").Dot("gateway").Dot("Request").
-								Call(jen.Lit("foo"), jen.Nil()),
+								Call(jen.Lit("foospace.foo"), jen.Nil()),
 							jen.Err().Op("!=").Nil(),
 						).Block(
 							jen.Return(jen.Id("result"), jen.Err()),
@@ -288,7 +292,8 @@ func TestGenFunc(t *testing.T) {
 		{
 			Name: "Func with param",
 			Input: Function{Property: Property{
-				Name: "foo"},
+				parent: ns,
+				Name:   "foo"},
 				Parameters: []Item{
 					&String{Property: Property{Name: "name"}},
 				},
@@ -304,7 +309,7 @@ func TestGenFunc(t *testing.T) {
 						jen.List(jen.Id("_"), jen.Err()).Op(":=").
 							Id("client").Dot("gateway").Dot("Request").
 							Call(
-								jen.Lit("foo"),
+								jen.Lit("foospace.foo"),
 								jen.Struct(
 									jen.Id("Name").String().Tag(map[string]string{"json": "name"}),
 								).Values(jen.Dict{
@@ -322,7 +327,8 @@ func TestGenFunc(t *testing.T) {
 		{
 			Name: "Func with callback returns callback params",
 			Input: Function{Property: Property{
-				Name: "foo"},
+				parent: ns,
+				Name:   "foo"},
 				Parameters: []Item{
 					&Function{Property: Property{
 						Name: "callback"},
@@ -341,7 +347,7 @@ func TestGenFunc(t *testing.T) {
 						jen.If(
 							jen.List(jen.Id("response"), jen.Err()).Op(":=").
 								Id("client").Dot("gateway").Dot("Request").
-								Call(jen.Lit("foo"), jen.Nil()),
+								Call(jen.Lit("foospace.foo"), jen.Nil()),
 							jen.Err().Op("!=").Nil(),
 						).Block(
 							jen.Return(jen.Id("result"), jen.Err()),

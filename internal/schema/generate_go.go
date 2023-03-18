@@ -72,6 +72,12 @@ func (this Object) ToGo() []*jen.Statement {
 }
 
 func (this Function) ToGo() []*jen.Statement {
+	ns, done := this.Parent().(*Namespace)
+	for !done {
+		ns, done = ns.Parent().(*Namespace)
+	}
+	namespace := ns.Name
+
 	pieces := []*jen.Statement{}
 	if this.Description != "" {
 		pieces = append(pieces, jen.Comment(util.Linewrap(this.Description, 80)))
@@ -144,7 +150,7 @@ func (this Function) ToGo() []*jen.Statement {
 			jen.If(
 				jen.List(jen.Id(responseVar), jen.Err()).Op(":=").
 					Id("client").Dot("gateway").Dot("Request").
-					Call(jen.Lit(this.Name), requestData),
+					Call(jen.Lit(namespace + "." + this.Name), requestData),
 				jen.Err().Op("!=").Nil(),
 			).Block(
 				jen.Return(errReturn...),
